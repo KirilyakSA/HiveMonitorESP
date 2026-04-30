@@ -1,0 +1,198 @@
+#include "domain/HiveMonitorApp.h"
+#include <ArduinoJson.h>
+#include "platform/Platform.h"
+
+namespace {
+String jsonFloat(float value) {
+    if (isnan(value)) return "null";
+    return String(value, 2);
+}
+}
+
+HiveMonitorApp::HiveMonitorApp() : webPortal_(configManager_) {
+}
+
+void HiveMonitorApp::setup() {
+    Serial.begin(115200);
+    delay(100);
+    Serial.println();
+    Serial.println("HiveMonitor firmware " HIVE_FW_VERSION);
+
+    setupFileSystem();
+    if (!configManager_.begin()) {
+        Serial.println("Config load failed, using defaults");
+        configManager_.resetDefaults();
+    }
+
+    setupWifi();
+    timeService_.begin(configManager_.data());
+    telemetryBuffer_.begin();
+    loadCell_.begin(configManager_.data());
+    environmentSensor_.begin(configManager_.data());
+    batteryMonitor_.begin(configManager_.data());
+    hallSensor_.begin(configManager_.data());
+    mqttService_.begin(configManager_.data());
+
+    webPortal_.begin(
+        &latestTelemetry_,
+        [this]() { return handleTare(); },
+        [this](float kg) { return handleCalibrate(kg); },
+        [this]() { return telemetryBuffer_.clear(); }
+    );
+
+    measureAndSend();
+}
+
+void HiveMonitorApp::loop() {
+    webPortal_.loop();
+    timeService_.loop(configManager_.data());
+    mqttService_.loop(configManager_.data());
+
+    if (mqttService_.connected()) {
+        telemetryBuffer_.flushTo([this](const String& line) {
+            return mqttService_.publishTelemetry(configManager_.data(), line);
+        });
+    }
+
+    uint32_t intervalMs = configManager_.data().measurementIntervalSeconds * 1000UL;
+    if (intervalMs == 0) intervalMs = 1800000UL;
+    if (millis() - lastMeasureMs_ >= intervalMs) {
+        measureAndSend();
+        if (configManager_.data().deepSleepEnabled) {
+            platformDeepSleepSeconds(configManager_.data().measurementIntervalSeconds);
+        }
+    }
+}
+
+void HiveMonitorApp::setupFileSystem() {
+    if (!HIVE_FS.begin()) {
+#if defined(HIVE_PLATFORM_ESP8266)
+        HIVE_FS.format();
+        HIVE_FS.begin();
+#else
+        HIVE_FS.begin(true);
+#endif
+    }
+}
+
+void HiveMonitorApp::setupWifi() {
+    const AppConfig& cfg = configManager_.data();
+    WiFi.mode(WIFI_STA);
+    if (cfg.wifiSsid.length() > 0) {
+        WiFi.begin(cfg.wifiSsid.c_str(), cfg.wifiPassword.c_str());
+        uint32_t started = millis();
+        while (WiFi.status() != WL_CONNECTED && millis() - started < 15000) {
+            delay(250);
+            Serial.print(".");
+        }
+        Serial.println();
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.print("Wi-Fi connected: ");
+        Serial.println(WiFi.localIP());
+    } else if (cfg.apFallbackEnabled) {
+        startAccessPoint();
+    }
+}
+
+void HiveMonitorApp::startAccessPoint() {
+    const AppConfig& cfg = configManager_.data();
+    String ssid = "HiveMonitor-" + platformChipId();
+    WiFi.mode(WIFI_AP_STA);
+    bool ok = WiFi.softAP(ssid.c_str(), cfg.apPassword.c_str());
+    Serial.print("AP ");
+    Serial.print(ssid);
+    Serial.println(ok ? " started" : " failed");
+}
+
+void HiveMonitorApp::measureAndSend() {
+    const AppConfig& cfg = configManager_.data();
+    latestTelemetry_ = Telemetry{};
+    latestTelemetry_.deviceId = cfg.deviceId;
+    latestTelemetry_.timestamp = timeService_.isoTimestamp();
+    latestTelemetry_.rssi = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
+
+    bool error = false;
+
+    if (cfg.weightEnabled) {
+        latestTelemetry_.weight = loadCell_.readKg(5);
+        if (isnan(latestTelemetry_.weight)) error = true;
+        if (!isnan(lastWeightKg_) && !isnan(latestTelemetry_.weight)) {
+            latestTelemetry_.weightChange = latestTelemetry_.weight - lastWeightKg_;
+        } else {
+            latestTelemetry_.weightChange = 0.0f;
+        }
+    }
+
+    if (cfg.temperatureEnabled) {
+        latestTelemetry_.temperature = environmentSensor_.readTemperature();
+        if (isnan(latestTelemetry_.temperature)) error = true;
+    }
+    if (cfg.humidityEnabled) {
+        latestTelemetry_.humidity = environmentSensor_.readHumidity();
+        if (isnan(latestTelemetry_.humidity)) error = true;
+    }
+    if (cfg.hallEnabled) {
+        latestTelemetry_.hiveOpened = hallSensor_.isOpen(cfg);
+    }
+    if (cfg.batteryEnabled) {
+        BatteryState battery = batteryMonitor_.read(cfg);
+        latestTelemetry_.batteryVoltage = battery.voltage;
+        latestTelemetry_.batteryPercent = battery.percent;
+    }
+
+    latestTelemetry_.errorFlag = error;
+    lastMeasureMs_ = millis();
+    if (!isnan(latestTelemetry_.weight)) {
+        lastWeightKg_ = latestTelemetry_.weight;
+    }
+
+    String payload = telemetryToJson(latestTelemetry_);
+    publishOrBuffer(payload);
+
+    if (latestTelemetry_.hiveOpened || fabs(latestTelemetry_.weightChange) >= cfg.significantWeightChangeKg || error) {
+        mqttService_.publishEvent(cfg, payload);
+    }
+}
+
+String HiveMonitorApp::telemetryToJson(const Telemetry& telemetry) const {
+    JsonDocument doc;
+    doc["deviceId"] = telemetry.deviceId;
+    doc["timestamp"] = telemetry.timestamp;
+    doc["weight"] = serialized(jsonFloat(telemetry.weight));
+    doc["weightChange"] = serialized(jsonFloat(telemetry.weightChange));
+    doc["temperature"] = serialized(jsonFloat(telemetry.temperature));
+    doc["humidity"] = serialized(jsonFloat(telemetry.humidity));
+    doc["hiveOpened"] = telemetry.hiveOpened;
+    doc["errorFlag"] = telemetry.errorFlag;
+    doc["batteryPercent"] = telemetry.batteryPercent;
+    doc["batteryVoltage"] = serialized(jsonFloat(telemetry.batteryVoltage));
+    doc["rssi"] = telemetry.rssi;
+
+    String out;
+    serializeJson(doc, out);
+    return out;
+}
+
+void HiveMonitorApp::publishOrBuffer(const String& payload) {
+    if (WiFi.status() == WL_CONNECTED && mqttService_.publishTelemetry(configManager_.data(), payload)) {
+        return;
+    }
+    telemetryBuffer_.append(payload);
+}
+
+bool HiveMonitorApp::handleTare() {
+    AppConfig& cfg = configManager_.data();
+    cfg.tareOffset = loadCell_.tare(10);
+    cfg.configVersion++;
+    return configManager_.save();
+}
+
+bool HiveMonitorApp::handleCalibrate(float knownWeightKg) {
+    AppConfig& cfg = configManager_.data();
+    cfg.calibrationFactor = loadCell_.calibrate(knownWeightKg, 10);
+    cfg.configVersion++;
+    return configManager_.save();
+}
+
