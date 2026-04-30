@@ -2,4 +2,4 @@
 
 Здесь будет web-интерфейс системы на React + TypeScript + Vite.
 
-Детальная документация: [docs/subprojects/web](../docs/subprojects/web/README.md).
+Детальная документация: [web/docs](docs/README.md).
