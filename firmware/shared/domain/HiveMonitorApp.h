@@ -48,6 +48,10 @@ private:
     bool wifiConfigChanged() const;
     void measureAndSend();
     void enterDeepSleepIfEnabled();
+    void handleMqttMessage(const String& topic, const String& payload);
+    bool handleMqttCommand(const String& command, JsonVariantConst data, String& message);
+    bool handleMqttConfigUpdate(JsonVariantConst data, String& message);
+    void publishCommandStatus(const String& command, bool ok, const String& message);
     String telemetryToJson(const Telemetry& telemetry) const;
     void publishOrBuffer(const String& payload);
     bool handleTare();

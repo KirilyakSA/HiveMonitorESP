@@ -112,6 +112,35 @@ firmware/
 
 Калибровка через backend переносится после MVP.
 
+## MQTT-команды
+
+Устройство подписывается на:
+
+- `hives/{deviceId}/commands`;
+- `hives/{deviceId}/config`.
+
+Поддерживаемые команды:
+
+- `measure` - немедленно выполнить измерение;
+- `restart` - перезагрузить устройство;
+- `tare` - выполнить тарирование и сохранить смещение;
+- `clearBuffer` - очистить локальный буфер телеметрии;
+- `configUpdate` - применить JSON-конфигурацию.
+
+Команды можно отправлять строкой (`measure`) или JSON:
+
+```json
+{"command":"measure"}
+```
+
+Для обновления конфигурации:
+
+```json
+{"command":"configUpdate","data":{"measurementIntervalSeconds":900}}
+```
+
+Ответ публикуется в `hives/{deviceId}/status`.
+
 ## Датчик Холла и сон
 
 Для ESP8266 поддерживаются режимы:

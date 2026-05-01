@@ -13,6 +13,13 @@ void MqttService::begin(const AppConfig& config) {
     }
     mqtt_.setServer(config.mqttHost.c_str(), config.mqttPort);
     mqtt_.setBufferSize(1024);
+    mqtt_.setCallback([this](char* topic, uint8_t* payload, unsigned int length) {
+        handleMessage(topic, payload, length);
+    });
+}
+
+void MqttService::setMessageHandler(MessageHandler handler) {
+    messageHandler_ = handler;
 }
 
 void MqttService::loop(const AppConfig& config) {
@@ -40,6 +47,18 @@ bool MqttService::publishEvent(const AppConfig& config, const String& payload) {
 bool MqttService::publishStatus(const AppConfig& config, const String& payload) {
     if (!ensureConnected(config)) return false;
     return mqtt_.publish(topic(config, "status").c_str(), payload.c_str(), true);
+}
+
+void MqttService::handleMessage(char* topic, uint8_t* payload, unsigned int length) {
+    if (!messageHandler_) return;
+
+    String topicString(topic);
+    String payloadString;
+    payloadString.reserve(length);
+    for (unsigned int i = 0; i < length; i++) {
+        payloadString += (char)payload[i];
+    }
+    messageHandler_(topicString, payloadString);
 }
 
 bool MqttService::ensureConnected(const AppConfig& config) {
