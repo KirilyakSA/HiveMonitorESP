@@ -47,6 +47,10 @@ bool ConfigManager::begin() {
         return false;
     }
     fromDocument(doc);
+    String error;
+    if (!validate(error)) {
+        return false;
+    }
     return true;
 }
 
@@ -90,7 +94,12 @@ bool ConfigManager::updateFromJson(const String& body, String& error) {
         error = err.c_str();
         return false;
     }
+    AppConfig previous = config_;
     fromDocument(doc);
+    if (!validate(error)) {
+        config_ = previous;
+        return false;
+    }
     config_.configVersion++;
     config_.updatedAt = (uint32_t)time(nullptr);
     return save();
@@ -215,4 +224,40 @@ void ConfigManager::toDocument(JsonDocument& doc, bool includeSecrets) const {
     doc["time"]["ntpServer"] = config_.ntpServer;
     doc["time"]["timezoneOffsetMinutes"] = config_.timezoneOffsetMinutes;
     doc["time"]["rtcNtpSyncIntervalMinutes"] = config_.rtcNtpSyncIntervalMinutes;
+}
+
+bool ConfigManager::validate(String& error) const {
+    if (config_.deviceId.length() == 0) {
+        error = "deviceId is required";
+        return false;
+    }
+    if (config_.apPassword.length() > 0 && config_.apPassword.length() < 8) {
+        error = "AP password must be empty or at least 8 characters";
+        return false;
+    }
+    if (config_.mqttPort == 0) {
+        error = "MQTT port must be greater than 0";
+        return false;
+    }
+    if (config_.measurementIntervalSeconds > 0 && config_.measurementIntervalSeconds < 10) {
+        error = "Measurement interval must be 0 or at least 10 seconds";
+        return false;
+    }
+    if (config_.calibrationFactor == 0.0f) {
+        error = "Calibration factor must not be 0";
+        return false;
+    }
+    if (config_.weightThresholdKg < 0.0f || config_.significantWeightChangeKg < 0.0f) {
+        error = "Weight thresholds must be non-negative";
+        return false;
+    }
+    if (config_.batteryMaxVoltage <= config_.batteryMinVoltage) {
+        error = "Battery max voltage must be greater than min voltage";
+        return false;
+    }
+    if (config_.batteryDividerRatio <= 0.0f || config_.adcReferenceVoltage <= 0.0f || config_.adcMaxValue <= 0) {
+        error = "Battery ADC settings must be positive";
+        return false;
+    }
+    return true;
 }

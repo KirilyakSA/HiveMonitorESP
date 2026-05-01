@@ -23,7 +23,7 @@ void MqttService::loop(const AppConfig& config) {
     mqtt_.loop();
 }
 
-bool MqttService::connected() const {
+bool MqttService::connected() {
     return mqtt_.connected();
 }
 
@@ -76,4 +76,3 @@ String MqttService::topic(const AppConfig& config, const char* suffix) const {
     value += suffix;
     return value;
 }
-

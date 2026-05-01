@@ -11,6 +11,8 @@ public:
     using TareHandler = std::function<bool()>;
     using CalibrateHandler = std::function<bool(float)>;
     using ClearBufferHandler = std::function<bool()>;
+    using BufferPendingHandler = std::function<uint16_t()>;
+    using BufferSizeHandler = std::function<size_t()>;
 
     WebPortal(ConfigManager& configManager);
 
@@ -18,7 +20,9 @@ public:
         const Telemetry* latestTelemetry,
         TareHandler onTare,
         CalibrateHandler onCalibrate,
-        ClearBufferHandler onClearBuffer
+        ClearBufferHandler onClearBuffer,
+        BufferPendingHandler onBufferPending,
+        BufferSizeHandler onBufferSize
     );
     void loop();
 
@@ -29,6 +33,8 @@ private:
     TareHandler onTare_;
     CalibrateHandler onCalibrate_;
     ClearBufferHandler onClearBuffer_;
+    BufferPendingHandler onBufferPending_;
+    BufferSizeHandler onBufferSize_;
 
     bool authenticated();
     void sendUnauthorized();

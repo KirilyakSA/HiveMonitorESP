@@ -9,7 +9,10 @@ uint8_t parseDhtType(const String& type) {
 }
 
 EnvironmentSensor::~EnvironmentSensor() {
-    delete dht_;
+    delete temperatureDht_;
+    if (!sharedDht_) {
+        delete humidityDht_;
+    }
 }
 
 void EnvironmentSensor::begin(const AppConfig& config) {
@@ -17,25 +20,55 @@ void EnvironmentSensor::begin(const AppConfig& config) {
 }
 
 void EnvironmentSensor::updateConfig(const AppConfig& config) {
-    uint8_t nextType = parseDhtType(config.thSensorType);
-    if (!dht_ || config.thSensorPin != pin_ || nextType != type_) {
-        recreateDht(config.thSensorPin, nextType);
+    int nextTemperaturePin = config.temperatureSensorPin;
+    int nextHumidityPin = config.humiditySensorPin;
+    uint8_t nextTemperatureType = parseDhtType(config.temperatureSensorType);
+    uint8_t nextHumidityType = parseDhtType(config.humiditySensorType);
+
+    if (nextTemperaturePin < 0) {
+        nextTemperaturePin = config.thSensorPin;
+        nextTemperatureType = parseDhtType(config.thSensorType);
+    }
+    if (nextHumidityPin < 0) {
+        nextHumidityPin = config.thSensorPin;
+        nextHumidityType = parseDhtType(config.thSensorType);
+    }
+
+    if (!temperatureDht_ ||
+        nextTemperaturePin != temperaturePin_ ||
+        nextHumidityPin != humidityPin_ ||
+        nextTemperatureType != temperatureType_ ||
+        nextHumidityType != humidityType_) {
+        recreateDhts(nextTemperaturePin, nextTemperatureType, nextHumidityPin, nextHumidityType);
     }
 }
 
 float EnvironmentSensor::readTemperature() {
-    return dht_ ? dht_->readTemperature() : NAN;
+    return temperatureDht_ ? temperatureDht_->readTemperature() : NAN;
 }
 
 float EnvironmentSensor::readHumidity() {
-    return dht_ ? dht_->readHumidity() : NAN;
+    return humidityDht_ ? humidityDht_->readHumidity() : NAN;
 }
 
-void EnvironmentSensor::recreateDht(int pin, uint8_t type) {
-    delete dht_;
-    pin_ = pin;
-    type_ = type;
-    dht_ = new DHT(pin_, type_);
-    dht_->begin();
-}
+void EnvironmentSensor::recreateDhts(int temperaturePin, uint8_t temperatureType, int humidityPin, uint8_t humidityType) {
+    delete temperatureDht_;
+    if (!sharedDht_) {
+        delete humidityDht_;
+    }
 
+    temperaturePin_ = temperaturePin;
+    humidityPin_ = humidityPin;
+    temperatureType_ = temperatureType;
+    humidityType_ = humidityType;
+    sharedDht_ = temperaturePin_ == humidityPin_ && temperatureType_ == humidityType_;
+
+    temperatureDht_ = new DHT(temperaturePin_, temperatureType_);
+    temperatureDht_->begin();
+    if (sharedDht_) {
+        humidityDht_ = temperatureDht_;
+    } else {
+        humidityDht_ = new DHT(humidityPin_, humidityType_);
+        humidityDht_->begin();
+    }
+}

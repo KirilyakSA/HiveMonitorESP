@@ -81,8 +81,13 @@ firmware/
 
 Телеметрия включает:
 
+- `schemaVersion`;
+- `firmwareVersion`;
+- `configVersion`;
 - `deviceId`;
 - `timestamp`;
+- `uptimeSeconds`;
+- `measurementIntervalSeconds`;
 - `weight`;
 - `weightChange`;
 - `temperature`;
@@ -91,7 +96,8 @@ firmware/
 - `errorFlag`;
 - `batteryPercent`;
 - `batteryVoltage`;
-- `rssi`.
+- `rssi`;
+- `freeHeap`.
 
 ## Вес и калибровка
 

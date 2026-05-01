@@ -25,6 +25,7 @@ void HiveMonitorApp::setup() {
     }
 
     setupWifi();
+    rememberWifiConfig();
     timeService_.begin(configManager_.data());
     telemetryBuffer_.begin();
     loadCell_.begin(configManager_.data());
@@ -32,19 +33,26 @@ void HiveMonitorApp::setup() {
     batteryMonitor_.begin(configManager_.data());
     hallSensor_.begin(configManager_.data());
     mqttService_.begin(configManager_.data());
+    appliedConfigVersion_ = configManager_.data().configVersion;
 
     webPortal_.begin(
         &latestTelemetry_,
         [this]() { return handleTare(); },
         [this](float kg) { return handleCalibrate(kg); },
-        [this]() { return telemetryBuffer_.clear(); }
+        [this]() { return telemetryBuffer_.clear(); },
+        [this]() { return telemetryBuffer_.pendingCount(); },
+        [this]() { return telemetryBuffer_.sizeBytes(); }
     );
 
     measureAndSend();
+    enterDeepSleepIfEnabled();
 }
 
 void HiveMonitorApp::loop() {
     webPortal_.loop();
+    if (configManager_.data().configVersion != appliedConfigVersion_) {
+        applyConfigChanges();
+    }
     timeService_.loop(configManager_.data());
     mqttService_.loop(configManager_.data());
 
@@ -58,9 +66,7 @@ void HiveMonitorApp::loop() {
     if (intervalMs == 0) intervalMs = 1800000UL;
     if (millis() - lastMeasureMs_ >= intervalMs) {
         measureAndSend();
-        if (configManager_.data().deepSleepEnabled) {
-            platformDeepSleepSeconds(configManager_.data().measurementIntervalSeconds);
-        }
+        enterDeepSleepIfEnabled();
     }
 }
 
@@ -77,6 +83,7 @@ void HiveMonitorApp::setupFileSystem() {
 
 void HiveMonitorApp::setupWifi() {
     const AppConfig& cfg = configManager_.data();
+    accessPointActive_ = false;
     WiFi.mode(WIFI_STA);
     if (cfg.wifiSsid.length() > 0) {
         WiFi.begin(cfg.wifiSsid.c_str(), cfg.wifiPassword.c_str());
@@ -101,9 +108,41 @@ void HiveMonitorApp::startAccessPoint() {
     String ssid = "HiveMonitor-" + platformChipId();
     WiFi.mode(WIFI_AP_STA);
     bool ok = WiFi.softAP(ssid.c_str(), cfg.apPassword.c_str());
+    accessPointActive_ = ok;
     Serial.print("AP ");
     Serial.print(ssid);
     Serial.println(ok ? " started" : " failed");
+}
+
+void HiveMonitorApp::applyConfigChanges() {
+    const AppConfig& cfg = configManager_.data();
+    if (wifiConfigChanged()) {
+        setupWifi();
+        rememberWifiConfig();
+    }
+    timeService_.begin(cfg);
+    loadCell_.updateConfig(cfg);
+    environmentSensor_.updateConfig(cfg);
+    batteryMonitor_.begin(cfg);
+    hallSensor_.begin(cfg);
+    mqttService_.begin(cfg);
+    appliedConfigVersion_ = cfg.configVersion;
+}
+
+void HiveMonitorApp::rememberWifiConfig() {
+    const AppConfig& cfg = configManager_.data();
+    appliedWifiSsid_ = cfg.wifiSsid;
+    appliedWifiPassword_ = cfg.wifiPassword;
+    appliedApFallbackEnabled_ = cfg.apFallbackEnabled;
+    appliedApPassword_ = cfg.apPassword;
+}
+
+bool HiveMonitorApp::wifiConfigChanged() const {
+    const AppConfig& cfg = configManager_.data();
+    return appliedWifiSsid_ != cfg.wifiSsid ||
+        appliedWifiPassword_ != cfg.wifiPassword ||
+        appliedApFallbackEnabled_ != cfg.apFallbackEnabled ||
+        appliedApPassword_ != cfg.apPassword;
 }
 
 void HiveMonitorApp::measureAndSend() {
@@ -156,10 +195,32 @@ void HiveMonitorApp::measureAndSend() {
     }
 }
 
+void HiveMonitorApp::enterDeepSleepIfEnabled() {
+    const AppConfig& cfg = configManager_.data();
+    if (!cfg.deepSleepEnabled || accessPointActive_) return;
+
+    uint32_t sleepSeconds = cfg.measurementIntervalSeconds;
+    if (sleepSeconds == 0) sleepSeconds = 1800;
+
+    mqttService_.loop(cfg);
+    delay(150);
+    Serial.print("Deep sleep for ");
+    Serial.print(sleepSeconds);
+    Serial.println(" seconds");
+    Serial.flush();
+    platformDeepSleepSeconds(sleepSeconds);
+}
+
 String HiveMonitorApp::telemetryToJson(const Telemetry& telemetry) const {
+    const AppConfig& cfg = configManager_.data();
     JsonDocument doc;
+    doc["schemaVersion"] = 1;
+    doc["firmwareVersion"] = HIVE_FW_VERSION;
+    doc["configVersion"] = cfg.configVersion;
     doc["deviceId"] = telemetry.deviceId;
     doc["timestamp"] = telemetry.timestamp;
+    doc["uptimeSeconds"] = millis() / 1000UL;
+    doc["measurementIntervalSeconds"] = cfg.measurementIntervalSeconds;
     doc["weight"] = serialized(jsonFloat(telemetry.weight));
     doc["weightChange"] = serialized(jsonFloat(telemetry.weightChange));
     doc["temperature"] = serialized(jsonFloat(telemetry.temperature));
@@ -169,6 +230,7 @@ String HiveMonitorApp::telemetryToJson(const Telemetry& telemetry) const {
     doc["batteryPercent"] = telemetry.batteryPercent;
     doc["batteryVoltage"] = serialized(jsonFloat(telemetry.batteryVoltage));
     doc["rssi"] = telemetry.rssi;
+    doc["freeHeap"] = ESP.getFreeHeap();
 
     String out;
     serializeJson(doc, out);
@@ -195,4 +257,3 @@ bool HiveMonitorApp::handleCalibrate(float knownWeightKg) {
     cfg.configVersion++;
     return configManager_.save();
 }
-

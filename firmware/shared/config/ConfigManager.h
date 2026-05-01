@@ -18,4 +18,5 @@ private:
     void applyDefaults();
     void fromDocument(JsonDocument& doc);
     void toDocument(JsonDocument& doc, bool includeSecrets) const;
+    bool validate(String& error) const;
 };

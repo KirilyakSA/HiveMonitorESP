@@ -49,7 +49,13 @@ bool TelemetryBuffer::flushTo(std::function<bool(const String&)> sender, uint16_
     File file = HIVE_FS.open(path_, "r");
     if (!file) return false;
 
-    String kept;
+    HIVE_FS.remove(tempPath_);
+    File out = HIVE_FS.open(tempPath_, "w");
+    if (!out) {
+        file.close();
+        return false;
+    }
+
     uint16_t sent = 0;
     bool allSent = true;
 
@@ -62,45 +68,52 @@ bool TelemetryBuffer::flushTo(std::function<bool(const String&)> sender, uint16_
             sent++;
         } else {
             allSent = false;
-            kept += line;
-            kept += '\n';
+            out.println(line);
         }
         yield();
     }
     file.close();
-
-    File out = HIVE_FS.open(path_, "w");
-    if (!out) return false;
-    out.print(kept);
     out.close();
-    return allSent;
+
+    return replaceWithTemp() && allSent;
+}
+
+bool TelemetryBuffer::replaceWithTemp() {
+    HIVE_FS.remove(path_);
+    return HIVE_FS.rename(tempPath_, path_);
 }
 
 void TelemetryBuffer::trimIfNeeded() {
-    if (sizeBytes() <= maxBytes_) return;
+    size_t currentSize = sizeBytes();
+    if (currentSize <= maxBytes_) return;
 
     File file = HIVE_FS.open(path_, "r");
     if (!file) return;
 
-    String kept;
-    bool dropping = true;
+    HIVE_FS.remove(tempPath_);
+    File out = HIVE_FS.open(tempPath_, "w");
+    if (!out) {
+        file.close();
+        return;
+    }
+
+    const size_t targetSize = maxBytes_ * 3 / 4;
+    size_t bytesToDrop = currentSize > targetSize ? currentSize - targetSize : 0;
+    size_t dropped = 0;
+
     while (file.available()) {
         String line = file.readStringUntil('\n');
-        if (dropping) {
-            if (line.indexOf("\"timestamp\"") >= 0) {
-                dropping = false;
-            }
+        size_t lineBytes = line.length() + 1;
+        if (dropped < bytesToDrop) {
+            dropped += lineBytes;
             continue;
         }
-        kept += line;
-        kept += '\n';
+        line.trim();
+        if (line.length() > 0) out.println(line);
         yield();
     }
     file.close();
-
-    File out = HIVE_FS.open(path_, "w");
-    if (!out) return;
-    out.print(kept);
     out.close();
-}
 
+    replaceWithTemp();
+}

@@ -11,7 +11,7 @@ public:
 
     void begin(const AppConfig& config);
     void loop(const AppConfig& config);
-    bool connected() const;
+    bool connected();
     bool publishTelemetry(const AppConfig& config, const String& payload);
     bool publishEvent(const AppConfig& config, const String& payload);
     bool publishStatus(const AppConfig& config, const String& payload);
@@ -26,4 +26,3 @@ private:
     bool ensureConnected(const AppConfig& config);
     String topic(const AppConfig& config, const char* suffix) const;
 };
-

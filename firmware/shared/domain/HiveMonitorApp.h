@@ -32,15 +32,24 @@ private:
     Telemetry latestTelemetry_;
 
     uint32_t lastMeasureMs_ = 0;
+    uint32_t appliedConfigVersion_ = 0;
     float lastWeightKg_ = NAN;
+    bool accessPointActive_ = false;
+    String appliedWifiSsid_;
+    String appliedWifiPassword_;
+    bool appliedApFallbackEnabled_ = false;
+    String appliedApPassword_;
 
     void setupFileSystem();
     void setupWifi();
     void startAccessPoint();
+    void applyConfigChanges();
+    void rememberWifiConfig();
+    bool wifiConfigChanged() const;
     void measureAndSend();
+    void enterDeepSleepIfEnabled();
     String telemetryToJson(const Telemetry& telemetry) const;
     void publishOrBuffer(const String& payload);
     bool handleTare();
     bool handleCalibrate(float knownWeightKg);
 };
-

@@ -14,10 +14,13 @@ public:
     float readHumidity();
 
 private:
-    DHT* dht_ = nullptr;
-    int pin_ = -1;
-    uint8_t type_ = DHT22;
+    DHT* temperatureDht_ = nullptr;
+    DHT* humidityDht_ = nullptr;
+    int temperaturePin_ = -1;
+    int humidityPin_ = -1;
+    uint8_t temperatureType_ = DHT22;
+    uint8_t humidityType_ = DHT22;
+    bool sharedDht_ = false;
 
-    void recreateDht(int pin, uint8_t type);
+    void recreateDhts(int temperaturePin, uint8_t temperatureType, int humidityPin, uint8_t humidityType);
 };
-
