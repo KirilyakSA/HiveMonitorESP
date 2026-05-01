@@ -1,5 +1,9 @@
 #include "communication/MqttService.h"
 
+namespace {
+const unsigned int MAX_INCOMING_PAYLOAD_BYTES = 1024;
+}
+
 MqttService::MqttService() : mqtt_(plainClient_) {
 }
 
@@ -54,6 +58,11 @@ void MqttService::handleMessage(char* topic, uint8_t* payload, unsigned int leng
     if (!messageHandler_) return;
 
     String topicString(topic);
+    if (length > MAX_INCOMING_PAYLOAD_BYTES) {
+        messageHandler_(topicString, "{\"command\":\"__payloadTooLarge\"}");
+        return;
+    }
+
     String payloadString;
     payloadString.reserve(length);
     for (unsigned int i = 0; i < length; i++) {

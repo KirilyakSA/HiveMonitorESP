@@ -7,6 +7,8 @@
 #endif
 
 namespace {
+const size_t MAX_CONFIG_JSON_BYTES = 4096;
+
 String jsonNumber(float value) {
     if (isnan(value)) return "null";
     return String(value, 2);
@@ -255,8 +257,14 @@ void WebPortal::handleConfigGet() {
 
 void WebPortal::handleConfigPost() {
     if (!authenticated()) return sendUnauthorized();
+    String body = server_.arg("plain");
+    if (body.length() > MAX_CONFIG_JSON_BYTES) {
+        server_.send(413, "text/plain", "Config JSON is too large");
+        return;
+    }
+
     String error;
-    if (!configManager_.updateFromJson(server_.arg("plain"), error)) {
+    if (!configManager_.updateFromJson(body, error)) {
         server_.send(400, "text/plain", error);
         return;
     }

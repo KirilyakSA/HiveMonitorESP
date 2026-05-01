@@ -316,6 +316,10 @@ void HiveMonitorApp::handleMqttMessage(const String& topic, const String& payloa
 }
 
 bool HiveMonitorApp::handleMqttCommand(const String& command, JsonVariantConst data, String& message) {
+    if (command == "__payloadTooLarge") {
+        message = "MQTT payload is too large";
+        return false;
+    }
     if (command == "measure") {
         measureAndSend();
         message = "Measurement published or buffered";

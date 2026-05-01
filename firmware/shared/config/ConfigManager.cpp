@@ -4,6 +4,7 @@
 
 namespace {
 const char* CONFIG_PATH = "/config.json";
+const size_t MAX_CONFIG_JSON_BYTES = 4096;
 
 const char* toString(TimeSource value) {
     switch (value) {
@@ -88,6 +89,11 @@ String ConfigManager::toJson(bool includeSecrets) const {
 }
 
 bool ConfigManager::updateFromJson(const String& body, String& error) {
+    if (body.length() > MAX_CONFIG_JSON_BYTES) {
+        error = "Config JSON is too large";
+        return false;
+    }
+
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, body);
     if (err) {
