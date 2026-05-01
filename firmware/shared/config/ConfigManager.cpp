@@ -118,7 +118,7 @@ void ConfigManager::fromDocument(JsonDocument& doc) {
 
     config_.wifiSsid = doc["wifi"]["ssid"] | config_.wifiSsid;
     config_.wifiPassword = doc["wifi"]["password"] | config_.wifiPassword;
-    config_.apFallbackEnabled = doc["wifi"]["apFallbackEnabled"] | config_.apFallbackEnabled;
+    config_.apFallbackEnabled = true;
     config_.apPassword = doc["wifi"]["apPassword"] | config_.apPassword;
 
     config_.mqttHost = doc["mqtt"]["host"] | config_.mqttHost;

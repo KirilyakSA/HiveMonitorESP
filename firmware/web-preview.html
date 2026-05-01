@@ -1,98 +1,9 @@
-#include "web/WebPortal.h"
-#include <ArduinoJson.h>
-#if defined(HIVE_PLATFORM_ESP8266)
-  #include <Updater.h>
-#else
-  #include <Update.h>
-#endif
-
-namespace {
-String jsonNumber(float value) {
-    if (isnan(value)) return "null";
-    return String(value, 2);
-}
-
-bool beginFirmwareUpdate() {
-#if defined(HIVE_PLATFORM_ESP8266)
-    uint32_t maxSketchSpace = (ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000;
-    return Update.begin(maxSketchSpace);
-#else
-    return Update.begin(UPDATE_SIZE_UNKNOWN);
-#endif
-}
-}
-
-WebPortal::WebPortal(ConfigManager& configManager)
-    : server_(80), configManager_(configManager) {
-}
-
-void WebPortal::begin(
-    const Telemetry* latestTelemetry,
-    TareHandler onTare,
-    CalibrateHandler onCalibrate,
-    ClearBufferHandler onClearBuffer,
-    BufferPendingHandler onBufferPending,
-    BufferSizeHandler onBufferSize
-) {
-    latestTelemetry_ = latestTelemetry;
-    onTare_ = onTare;
-    onCalibrate_ = onCalibrate;
-    onClearBuffer_ = onClearBuffer;
-    onBufferPending_ = onBufferPending;
-    onBufferSize_ = onBufferSize;
-
-    server_.on("/", HTTP_GET, [this]() { handleIndex(); });
-    server_.on("/api/config", HTTP_GET, [this]() { handleConfigGet(); });
-    server_.on("/api/config", HTTP_POST, [this]() { handleConfigPost(); });
-    server_.on("/api/status", HTTP_GET, [this]() { handleStatus(); });
-    server_.on("/api/tare", HTTP_POST, [this]() { handleTare(); });
-    server_.on("/api/calibrate", HTTP_POST, [this]() { handleCalibrate(); });
-    server_.on("/api/buffer/clear", HTTP_POST, [this]() { handleClearBuffer(); });
-    server_.on("/api/config/reset", HTTP_POST, [this]() { handleResetConfig(); });
-    server_.on("/api/restart", HTTP_POST, [this]() { handleRestart(); });
-    server_.on("/update", HTTP_GET, [this]() { handleUpdateForm(); });
-    server_.on(
-        "/update",
-        HTTP_POST,
-        [this]() {
-            if (updateOk_) {
-                server_.send(200, "text/plain; charset=utf-8", "Обновление загружено. Перезагрузка...");
-                delay(800);
-                platformRestart();
-            } else {
-                String message = updateError_.length() > 0 ? updateError_ : "Ошибка обновления";
-                server_.send(500, "text/plain; charset=utf-8", message);
-            }
-        },
-        [this]() { handleUpdateUpload(); }
-    );
-    server_.begin();
-}
-
-void WebPortal::loop() {
-    server_.handleClient();
-}
-
-bool WebPortal::authenticated() {
-    const AppConfig& cfg = configManager_.data();
-    if (cfg.adminPassword.length() == 0) return true;
-    return server_.authenticate("admin", cfg.adminPassword.c_str());
-}
-
-void WebPortal::sendUnauthorized() {
-    server_.requestAuthentication();
-}
-
-void WebPortal::handleIndex() {
-    if (!authenticated()) return sendUnauthorized();
-
-    const char* html = R"HTML(
 <!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>HiveMonitor</title>
+  <title>HiveMonitor Preview</title>
   <style>
     body{font-family:Arial,sans-serif;margin:0;background:#f5f7f2;color:#18231b}
     main{max-width:980px;margin:0 auto;padding:20px}
@@ -144,14 +55,47 @@ void WebPortal::handleIndex() {
     <button class="secondary" onclick="clearBuffer()">Очистить буфер</button>
     <button class="secondary" onclick="resetConfig()">Сбросить настройки</button>
     <button class="secondary" onclick="restartDevice()">Перезагрузить</button>
-    <button class="secondary" onclick="location.href='/update'">Обновить прошивку</button>
+    <button class="secondary" onclick="alert('На устройстве откроется /update')">Обновить прошивку</button>
   </section>
 </main>
 <script>
-let config = {};
+let config = {
+  deviceId: 'hive-demo-8266',
+  deviceToken: 'demo-token',
+  adminPassword: 'admin',
+  wifi: {ssid: 'HiveWiFi', password: 'secret', apFallbackEnabled: true, apPassword: 'hivemonitor'},
+  mqtt: {host: '192.168.1.10', port: 1883, tls: false, user: 'hive-demo-8266', password: ''},
+  weight: {enabled: true, doutPin: 4, sckPin: 0, calibrationFactor: 1, tareOffset: 1200, thresholdKg: 5, significantChangeKg: 20},
+  environment: {temperatureEnabled: true, humidityEnabled: true, combinedType: 'DHT22', combinedPin: 2, temperatureType: 'DHT22', temperaturePin: 2, humidityType: 'DHT22', humidityPin: 2},
+  hall: {enabled: true, pin: 14, openLevelHigh: false, wakeMode: 'HALL_NO_WAKE'},
+  battery: {enabled: true, adcPin: 17, minVoltage: 3.2, maxVoltage: 4.2, dividerRatio: 1, adcReferenceVoltage: 3.3, adcMaxValue: 1023},
+  time: {source: 'NTP', ntpServer: 'pool.ntp.org', timezoneOffsetMinutes: 0, rtcNtpSyncIntervalMinutes: 1440},
+  measurementIntervalSeconds: 1800,
+  deepSleepEnabled: false
+};
+function mockStatus() {
+  return {
+    firmwareVersion: '0.1.0',
+    ip: '192.168.1.50',
+    wifiConnected: true,
+    rssi: -57,
+    freeHeap: 45608,
+    buffer: {pendingCount: 2, sizeBytes: 512},
+    telemetry: {
+      deviceId: config.deviceId,
+      timestamp: new Date().toISOString(),
+      weight: 42.35,
+      weightChange: -0.18,
+      temperature: 24.7,
+      humidity: 61.2,
+      hiveOpened: false,
+      batteryPercent: 84,
+      batteryVoltage: 4.04
+    }
+  };
+}
 async function load() {
-  config = await (await fetch('/api/config')).json();
-  status.textContent = JSON.stringify(await (await fetch('/api/status')).json(), null, 2);
+  status.textContent = JSON.stringify(mockStatus(), null, 2);
   deviceId.value = config.deviceId || '';
   deviceToken.value = config.deviceToken || '';
   adminPassword.value = config.adminPassword || '';
@@ -197,7 +141,7 @@ async function load() {
   calibrationFactor.value = config.weight?.calibrationFactor ?? 1;
 }
 async function saveConfig() {
-  const next = {
+  config = {
     deviceId: deviceId.value, deviceToken: deviceToken.value, adminPassword: adminPassword.value,
     wifi:{ssid:wifiSsid.value,password:wifiPassword.value,apFallbackEnabled:true,apPassword:apPassword.value},
     mqtt:{host:mqttHost.value,port:+mqttPort.value,tls:mqttTls.value === 'true',user:mqttUser.value,password:mqttPassword.value},
@@ -209,144 +153,15 @@ async function saveConfig() {
     measurementIntervalSeconds:+measurementIntervalSeconds.value,
     deepSleepEnabled:deepSleepEnabled.value === 'true'
   };
-  await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(next)});
   await load();
+  alert('Preview: настройки сохранены локально в странице');
 }
-async function tare(){ await fetch('/api/tare',{method:'POST'}); await load(); }
-async function calibrate(){ const kg = prompt('Укажите известный вес, кг'); if(kg) await fetch('/api/calibrate?kg='+encodeURIComponent(kg),{method:'POST'}); await load(); }
-async function clearBuffer(){ await fetch('/api/buffer/clear',{method:'POST'}); await load(); }
-async function resetConfig(){ if(confirm('Сбросить настройки?')) await fetch('/api/config/reset',{method:'POST'}); await load(); }
-async function restartDevice(){ await fetch('/api/restart',{method:'POST'}); }
+async function tare(){ tareOffset.value = '0'; alert('Preview: тарирование'); }
+async function calibrate(){ const kg = prompt('Укажите известный вес, кг'); if(kg) alert('Preview: калибровка по ' + kg + ' кг'); }
+async function clearBuffer(){ alert('Preview: буфер очищен'); }
+async function resetConfig(){ if(confirm('Сбросить настройки?')) location.reload(); }
+async function restartDevice(){ alert('Preview: устройство перезагрузится'); }
 load(); setInterval(load, 10000);
 </script>
 </body>
 </html>
-)HTML";
-    server_.send(200, "text/html; charset=utf-8", html);
-}
-
-void WebPortal::handleConfigGet() {
-    if (!authenticated()) return sendUnauthorized();
-    server_.send(200, "application/json", configManager_.toJson(true));
-}
-
-void WebPortal::handleConfigPost() {
-    if (!authenticated()) return sendUnauthorized();
-    String error;
-    if (!configManager_.updateFromJson(server_.arg("plain"), error)) {
-        server_.send(400, "text/plain", error);
-        return;
-    }
-    server_.send(200, "application/json", "{\"ok\":true}");
-}
-
-void WebPortal::handleStatus() {
-    if (!authenticated()) return sendUnauthorized();
-
-    JsonDocument doc;
-    doc["firmwareVersion"] = HIVE_FW_VERSION;
-    doc["ip"] = WiFi.localIP().toString();
-    doc["wifiConnected"] = WiFi.status() == WL_CONNECTED;
-    doc["rssi"] = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
-    doc["freeHeap"] = ESP.getFreeHeap();
-    if (onBufferPending_) doc["buffer"]["pendingCount"] = onBufferPending_();
-    if (onBufferSize_) doc["buffer"]["sizeBytes"] = onBufferSize_();
-    if (latestTelemetry_) {
-        doc["telemetry"]["deviceId"] = latestTelemetry_->deviceId;
-        doc["telemetry"]["timestamp"] = latestTelemetry_->timestamp;
-        doc["telemetry"]["weight"] = serialized(jsonNumber(latestTelemetry_->weight));
-        doc["telemetry"]["weightChange"] = serialized(jsonNumber(latestTelemetry_->weightChange));
-        doc["telemetry"]["temperature"] = serialized(jsonNumber(latestTelemetry_->temperature));
-        doc["telemetry"]["humidity"] = serialized(jsonNumber(latestTelemetry_->humidity));
-        doc["telemetry"]["hiveOpened"] = latestTelemetry_->hiveOpened;
-        doc["telemetry"]["batteryPercent"] = latestTelemetry_->batteryPercent;
-        doc["telemetry"]["batteryVoltage"] = serialized(jsonNumber(latestTelemetry_->batteryVoltage));
-    }
-    String out;
-    serializeJsonPretty(doc, out);
-    server_.send(200, "application/json", out);
-}
-
-void WebPortal::handleTare() {
-    if (!authenticated()) return sendUnauthorized();
-    bool ok = onTare_ && onTare_();
-    server_.send(ok ? 200 : 500, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
-}
-
-void WebPortal::handleCalibrate() {
-    if (!authenticated()) return sendUnauthorized();
-    float kg = server_.arg("kg").toFloat();
-    bool ok = kg > 0.0f && onCalibrate_ && onCalibrate_(kg);
-    server_.send(ok ? 200 : 400, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
-}
-
-void WebPortal::handleClearBuffer() {
-    if (!authenticated()) return sendUnauthorized();
-    bool ok = onClearBuffer_ && onClearBuffer_();
-    server_.send(ok ? 200 : 500, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
-}
-
-void WebPortal::handleResetConfig() {
-    if (!authenticated()) return sendUnauthorized();
-    bool ok = configManager_.resetDefaults();
-    server_.send(ok ? 200 : 500, "application/json", ok ? "{\"ok\":true}" : "{\"ok\":false}");
-}
-
-void WebPortal::handleRestart() {
-    if (!authenticated()) return sendUnauthorized();
-    server_.send(200, "application/json", "{\"ok\":true}");
-    delay(500);
-    platformRestart();
-}
-
-void WebPortal::handleUpdateForm() {
-    if (!authenticated()) return sendUnauthorized();
-    String html = "<!doctype html><html lang='ru'><meta charset='utf-8'><title>Обновление</title>"
-        "<body><h1>Обновление прошивки</h1><form method='POST' action='/update' enctype='multipart/form-data'>"
-        "<input type='file' name='firmware'><button>Загрузить</button></form><p><a href='/'>Назад</a></p></body></html>";
-    server_.send(200, "text/html; charset=utf-8", html);
-}
-
-void WebPortal::handleUpdateUpload() {
-    if (!authenticated()) return;
-    HTTPUpload& upload = server_.upload();
-    if (upload.status == UPLOAD_FILE_START) {
-        updateInProgress_ = true;
-        updateOk_ = false;
-        updateBytes_ = 0;
-        updateError_ = "";
-        if (!beginFirmwareUpdate()) {
-            failUpdate("Не удалось начать обновление");
-        }
-    } else if (upload.status == UPLOAD_FILE_WRITE) {
-        if (!updateInProgress_ || updateError_.length() > 0) return;
-        size_t written = Update.write(upload.buf, upload.currentSize);
-        updateBytes_ += written;
-        if (written != upload.currentSize) {
-            failUpdate("Ошибка записи прошивки");
-        }
-    } else if (upload.status == UPLOAD_FILE_END) {
-        if (!updateInProgress_ || updateError_.length() > 0) return;
-        if (updateBytes_ == 0) {
-            failUpdate("Файл прошивки пустой");
-            return;
-        }
-        if (!Update.end(true)) {
-            failUpdate("Ошибка завершения обновления");
-            return;
-        }
-        updateInProgress_ = false;
-        updateOk_ = !Update.hasError();
-        if (!updateOk_) {
-            updateError_ = "Ошибка проверки прошивки";
-        }
-    } else if (upload.status == UPLOAD_FILE_ABORTED) {
-        failUpdate("Загрузка прошивки прервана");
-    }
-}
-
-void WebPortal::failUpdate(const String& message) {
-    updateInProgress_ = false;
-    updateOk_ = false;
-    updateError_ = message;
-}
