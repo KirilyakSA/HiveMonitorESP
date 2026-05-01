@@ -16,6 +16,9 @@
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 14px}
     button{padding:10px 14px;border:0;border-radius:6px;background:#236b3a;color:white;cursor:pointer;margin:8px 8px 0 0}
     button.secondary{background:#52665a}
+    .notice{display:none;padding:10px 12px;border-radius:6px;margin:10px 0;background:#eef2ea;border:1px solid #b9c3b2}
+    .notice.error{display:block;background:#fff0f0;border-color:#d99;color:#7a1d1d}
+    .notice.ok{display:block;background:#eef8ee;border-color:#9cba9c;color:#1f5a2d}
     pre{white-space:pre-wrap;background:#eef2ea;padding:12px;border-radius:6px;overflow:auto}
   </style>
 </head>
@@ -25,6 +28,7 @@
   <section><h2>Текущие показания</h2><pre id="status">Загрузка...</pre></section>
   <section>
     <h2>Настройки</h2>
+    <div id="notice" class="notice"></div>
     <fieldset><legend>Устройство</legend><div class="grid">
       <div><label>Device ID</label><input id="deviceId"></div><div><label>Device Token</label><input id="deviceToken"></div><div><label>Пароль администратора</label><input id="adminPassword" type="password"></div>
     </div></fieldset>
@@ -78,6 +82,9 @@ function mockStatus() {
     firmwareVersion: '0.1.0',
     ip: '192.168.1.50',
     wifiConnected: true,
+    mqttConnected: true,
+    lastPublishOk: true,
+    lastPublishMessage: 'Telemetry published',
     rssi: -57,
     freeHeap: 45608,
     factoryReset: {pin: 'D6', holdSeconds: 5},
@@ -99,6 +106,10 @@ function mockStatus() {
       batteryVoltage: 4.04
     }
   };
+}
+function showNotice(message, ok) {
+  notice.textContent = message;
+  notice.className = 'notice ' + (ok ? 'ok' : 'error');
 }
 async function load() {
   status.textContent = JSON.stringify(mockStatus(), null, 2);
@@ -160,13 +171,13 @@ async function saveConfig() {
     deepSleepEnabled:deepSleepEnabled.value === 'true'
   };
   await load();
-  alert('Preview: настройки сохранены локально в странице');
+  showNotice('Preview: настройки сохранены локально в странице', true);
 }
-async function tare(){ tareOffset.value = '0'; alert('Preview: тарирование'); }
-async function calibrate(){ const kg = prompt('Укажите известный вес, кг'); if(kg) alert('Preview: калибровка по ' + kg + ' кг'); }
-async function clearBuffer(){ alert('Preview: буфер очищен'); }
+async function tare(){ tareOffset.value = '0'; showNotice('Preview: тарирование', true); }
+async function calibrate(){ const kg = prompt('Укажите известный вес, кг'); if(kg) showNotice('Preview: калибровка по ' + kg + ' кг', true); }
+async function clearBuffer(){ showNotice('Preview: буфер очищен', true); }
 async function resetConfig(){ if(confirm('Сбросить настройки?')) location.reload(); }
-async function restartDevice(){ alert('Preview: устройство перезагрузится'); }
+async function restartDevice(){ showNotice('Preview: устройство перезагрузится', true); }
 load(); setInterval(load, 10000);
 </script>
 </body>

@@ -13,6 +13,8 @@ public:
     using ClearBufferHandler = std::function<bool()>;
     using BufferPendingHandler = std::function<uint16_t()>;
     using BufferSizeHandler = std::function<size_t()>;
+    using BoolStatusHandler = std::function<bool()>;
+    using StringStatusHandler = std::function<String()>;
 
     WebPortal(ConfigManager& configManager);
 
@@ -22,7 +24,10 @@ public:
         CalibrateHandler onCalibrate,
         ClearBufferHandler onClearBuffer,
         BufferPendingHandler onBufferPending,
-        BufferSizeHandler onBufferSize
+        BufferSizeHandler onBufferSize,
+        BoolStatusHandler onMqttConnected,
+        BoolStatusHandler onLastPublishOk,
+        StringStatusHandler onLastPublishMessage
     );
     void loop();
 
@@ -35,6 +40,9 @@ private:
     ClearBufferHandler onClearBuffer_;
     BufferPendingHandler onBufferPending_;
     BufferSizeHandler onBufferSize_;
+    BoolStatusHandler onMqttConnected_;
+    BoolStatusHandler onLastPublishOk_;
+    StringStatusHandler onLastPublishMessage_;
     bool updateInProgress_ = false;
     bool updateOk_ = false;
     size_t updateBytes_ = 0;

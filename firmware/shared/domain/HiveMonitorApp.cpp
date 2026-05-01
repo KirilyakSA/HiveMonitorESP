@@ -47,7 +47,10 @@ void HiveMonitorApp::setup() {
         [this](float kg) { return handleCalibrate(kg); },
         [this]() { return telemetryBuffer_.clear(); },
         [this]() { return telemetryBuffer_.pendingCount(); },
-        [this]() { return telemetryBuffer_.sizeBytes(); }
+        [this]() { return telemetryBuffer_.sizeBytes(); },
+        [this]() { return mqttConnected(); },
+        [this]() { return lastPublishOk(); },
+        [this]() { return lastPublishMessage(); }
     );
 
     measureAndSend();
@@ -406,9 +409,24 @@ String HiveMonitorApp::telemetryToJson(const Telemetry& telemetry) const {
 
 void HiveMonitorApp::publishOrBuffer(const String& payload) {
     if (WiFi.status() == WL_CONNECTED && mqttService_.publishTelemetry(configManager_.data(), payload)) {
+        lastPublishOk_ = true;
+        lastPublishMessage_ = "Telemetry published";
         return;
     }
-    telemetryBuffer_.append(payload);
+    lastPublishOk_ = false;
+    lastPublishMessage_ = telemetryBuffer_.append(payload) ? "Telemetry buffered" : "Telemetry publish and buffer failed";
+}
+
+bool HiveMonitorApp::mqttConnected() {
+    return mqttService_.connected();
+}
+
+bool HiveMonitorApp::lastPublishOk() const {
+    return lastPublishOk_;
+}
+
+String HiveMonitorApp::lastPublishMessage() const {
+    return lastPublishMessage_;
 }
 
 bool HiveMonitorApp::handleTare() {

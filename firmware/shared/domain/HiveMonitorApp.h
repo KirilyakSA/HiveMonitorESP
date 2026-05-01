@@ -39,6 +39,8 @@ private:
     String appliedWifiPassword_;
     bool appliedApFallbackEnabled_ = false;
     String appliedApPassword_;
+    bool lastPublishOk_ = false;
+    String lastPublishMessage_ = "No telemetry published yet";
 
     void setupFileSystem();
     bool handleFactoryResetButton();
@@ -56,6 +58,9 @@ private:
     void publishCommandStatus(const String& command, bool ok, const String& message);
     String telemetryToJson(const Telemetry& telemetry) const;
     void publishOrBuffer(const String& payload);
+    bool mqttConnected();
+    bool lastPublishOk() const;
+    String lastPublishMessage() const;
     bool handleTare();
     bool handleCalibrate(float knownWeightKg);
 };

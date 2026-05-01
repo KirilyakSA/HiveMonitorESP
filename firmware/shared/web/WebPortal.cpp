@@ -32,7 +32,10 @@ void WebPortal::begin(
     CalibrateHandler onCalibrate,
     ClearBufferHandler onClearBuffer,
     BufferPendingHandler onBufferPending,
-    BufferSizeHandler onBufferSize
+    BufferSizeHandler onBufferSize,
+    BoolStatusHandler onMqttConnected,
+    BoolStatusHandler onLastPublishOk,
+    StringStatusHandler onLastPublishMessage
 ) {
     latestTelemetry_ = latestTelemetry;
     onTare_ = onTare;
@@ -40,6 +43,9 @@ void WebPortal::begin(
     onClearBuffer_ = onClearBuffer;
     onBufferPending_ = onBufferPending;
     onBufferSize_ = onBufferSize;
+    onMqttConnected_ = onMqttConnected;
+    onLastPublishOk_ = onLastPublishOk;
+    onLastPublishMessage_ = onLastPublishMessage;
 
     server_.on("/", HTTP_GET, [this]() { handleIndex(); });
     server_.on("/api/config", HTTP_GET, [this]() { handleConfigGet(); });
@@ -105,6 +111,9 @@ void WebPortal::handleIndex() {
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 14px}
     button{padding:10px 14px;border:0;border-radius:6px;background:#236b3a;color:white;cursor:pointer;margin:8px 8px 0 0}
     button.secondary{background:#52665a}
+    .notice{display:none;padding:10px 12px;border-radius:6px;margin:10px 0;background:#eef2ea;border:1px solid #b9c3b2}
+    .notice.error{display:block;background:#fff0f0;border-color:#d99;color:#7a1d1d}
+    .notice.ok{display:block;background:#eef8ee;border-color:#9cba9c;color:#1f5a2d}
     pre{white-space:pre-wrap;background:#eef2ea;padding:12px;border-radius:6px;overflow:auto}
   </style>
 </head>
@@ -114,6 +123,7 @@ void WebPortal::handleIndex() {
   <section><h2>Текущие показания</h2><pre id="status">Загрузка...</pre></section>
   <section>
     <h2>Настройки</h2>
+    <div id="notice" class="notice"></div>
     <fieldset><legend>Устройство</legend><div class="grid">
       <div><label>Device ID</label><input id="deviceId"></div><div><label>Device Token</label><input id="deviceToken"></div><div><label>Пароль администратора</label><input id="adminPassword" type="password"></div>
     </div></fieldset>
@@ -149,6 +159,20 @@ void WebPortal::handleIndex() {
 </main>
 <script>
 let config = {};
+function showNotice(message, ok) {
+  notice.textContent = message;
+  notice.className = 'notice ' + (ok ? 'ok' : 'error');
+}
+async function requestAction(url, options, okMessage) {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    showNotice(await res.text(), false);
+    return false;
+  }
+  showNotice(okMessage, true);
+  await load();
+  return true;
+}
 async function load() {
   config = await (await fetch('/api/config')).json();
   status.textContent = JSON.stringify(await (await fetch('/api/status')).json(), null, 2);
@@ -209,14 +233,13 @@ async function saveConfig() {
     measurementIntervalSeconds:+measurementIntervalSeconds.value,
     deepSleepEnabled:deepSleepEnabled.value === 'true'
   };
-  await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(next)});
-  await load();
+  await requestAction('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(next)},'Настройки сохранены');
 }
-async function tare(){ await fetch('/api/tare',{method:'POST'}); await load(); }
-async function calibrate(){ const kg = prompt('Укажите известный вес, кг'); if(kg) await fetch('/api/calibrate?kg='+encodeURIComponent(kg),{method:'POST'}); await load(); }
-async function clearBuffer(){ await fetch('/api/buffer/clear',{method:'POST'}); await load(); }
-async function resetConfig(){ if(confirm('Сбросить настройки?')) await fetch('/api/config/reset',{method:'POST'}); await load(); }
-async function restartDevice(){ await fetch('/api/restart',{method:'POST'}); }
+async function tare(){ await requestAction('/api/tare',{method:'POST'},'Тара сохранена'); }
+async function calibrate(){ const kg = prompt('Укажите известный вес, кг'); if(kg) await requestAction('/api/calibrate?kg='+encodeURIComponent(kg),{method:'POST'},'Калибровка сохранена'); }
+async function clearBuffer(){ await requestAction('/api/buffer/clear',{method:'POST'},'Буфер очищен'); }
+async function resetConfig(){ if(confirm('Сбросить настройки?')) await requestAction('/api/config/reset',{method:'POST'},'Настройки сброшены'); }
+async function restartDevice(){ await requestAction('/api/restart',{method:'POST'},'Перезагрузка...'); }
 load(); setInterval(load, 10000);
 </script>
 </body>
@@ -249,6 +272,9 @@ void WebPortal::handleStatus() {
     doc["wifiConnected"] = WiFi.status() == WL_CONNECTED;
     doc["rssi"] = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
     doc["freeHeap"] = ESP.getFreeHeap();
+    if (onMqttConnected_) doc["mqttConnected"] = onMqttConnected_();
+    if (onLastPublishOk_) doc["lastPublishOk"] = onLastPublishOk_();
+    if (onLastPublishMessage_) doc["lastPublishMessage"] = onLastPublishMessage_();
     if (onBufferPending_) doc["buffer"]["pendingCount"] = onBufferPending_();
     if (onBufferSize_) doc["buffer"]["sizeBytes"] = onBufferSize_();
     if (latestTelemetry_) {
