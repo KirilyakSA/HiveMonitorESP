@@ -127,13 +127,13 @@ void WebPortal::handleIndex() {
     <h2>Настройки</h2>
     <div id="notice" class="notice"></div>
     <fieldset><legend>Устройство</legend><div class="grid">
-      <div><label>Device ID</label><input id="deviceId"></div><div><label>Device Token</label><input id="deviceToken"></div><div><label>Пароль администратора</label><input id="adminPassword" type="password"></div>
+      <div><label>Device ID</label><input id="deviceId"></div><div><label>Device Token</label><input id="deviceToken" placeholder="оставить без изменений"></div><div><label>Пароль администратора</label><input id="adminPassword" type="password" placeholder="оставить без изменений"></div>
     </div></fieldset>
     <fieldset><legend>Wi-Fi и точка доступа</legend><div class="grid">
-      <div><label>Wi-Fi SSID</label><input id="wifiSsid"></div><div><label>Wi-Fi пароль</label><input id="wifiPassword" type="password"></div><div><label>AP пароль восстановления</label><input id="apPassword" type="password"></div>
+      <div><label>Wi-Fi SSID</label><input id="wifiSsid"></div><div><label>Wi-Fi пароль</label><input id="wifiPassword" type="password" placeholder="оставить без изменений"></div><div><label>AP пароль восстановления</label><input id="apPassword" type="password" placeholder="оставить без изменений"></div>
     </div></fieldset>
     <fieldset><legend>MQTT</legend><div class="grid">
-      <div><label>MQTT host</label><input id="mqttHost"></div><div><label>MQTT port</label><input id="mqttPort" type="number"></div><div><label>MQTT TLS</label><select id="mqttTls"><option value="false">без TLS</option><option value="true">с TLS</option></select></div><div><label>MQTT user</label><input id="mqttUser"></div><div><label>MQTT пароль</label><input id="mqttPassword" type="password"></div>
+      <div><label>MQTT host</label><input id="mqttHost"></div><div><label>MQTT port</label><input id="mqttPort" type="number"></div><div><label>MQTT TLS</label><select id="mqttTls"><option value="false">без TLS</option><option value="true">с TLS</option></select></div><div><label>MQTT user</label><input id="mqttUser"></div><div><label>MQTT пароль</label><input id="mqttPassword" type="password" placeholder="оставить без изменений"></div>
     </div></fieldset>
     <fieldset><legend>Весы HX711</legend><div class="grid">
       <div><label>Весы</label><select id="weightEnabled"><option value="true">включены</option><option value="false">выключены</option></select></div><div><label>HX711 DOUT</label><input id="hx711DoutPin" type="number"></div><div><label>HX711 SCK</label><input id="hx711SckPin" type="number"></div><div><label>Смещение тары</label><input id="tareOffset" type="number"></div><div><label>Коэффициент калибровки</label><input id="calibrationFactor" type="number" step="0.0001"></div><div><label>Весовой порог, кг</label><input id="weightThresholdKg" type="number" step="0.01"></div><div><label>Значимое изменение, кг</label><input id="significantWeightChangeKg" type="number" step="0.01"></div>
@@ -179,16 +179,16 @@ async function load() {
   config = await (await fetch('/api/config')).json();
   status.textContent = JSON.stringify(await (await fetch('/api/status')).json(), null, 2);
   deviceId.value = config.deviceId || '';
-  deviceToken.value = config.deviceToken || '';
-  adminPassword.value = config.adminPassword || '';
+  deviceToken.value = '';
+  adminPassword.value = '';
   wifiSsid.value = config.wifi?.ssid || '';
-  wifiPassword.value = config.wifi?.password || '';
-  apPassword.value = config.wifi?.apPassword || '';
+  wifiPassword.value = '';
+  apPassword.value = '';
   mqttHost.value = config.mqtt?.host || '';
   mqttPort.value = config.mqtt?.port || 1883;
   mqttTls.value = String(!!config.mqtt?.tls);
   mqttUser.value = config.mqtt?.user || '';
-  mqttPassword.value = config.mqtt?.password || '';
+  mqttPassword.value = '';
   weightEnabled.value = String(config.weight?.enabled ?? true);
   hx711DoutPin.value = config.weight?.doutPin ?? '';
   hx711SckPin.value = config.weight?.sckPin ?? '';
@@ -224,9 +224,9 @@ async function load() {
 }
 async function saveConfig() {
   const next = {
-    deviceId: deviceId.value, deviceToken: deviceToken.value, adminPassword: adminPassword.value,
-    wifi:{ssid:wifiSsid.value,password:wifiPassword.value,apFallbackEnabled:true,apPassword:apPassword.value},
-    mqtt:{host:mqttHost.value,port:+mqttPort.value,tls:mqttTls.value === 'true',user:mqttUser.value,password:mqttPassword.value},
+    deviceId: deviceId.value,
+    wifi:{ssid:wifiSsid.value,apFallbackEnabled:true},
+    mqtt:{host:mqttHost.value,port:+mqttPort.value,tls:mqttTls.value === 'true',user:mqttUser.value},
     weight:{enabled:weightEnabled.value === 'true',doutPin:+hx711DoutPin.value,sckPin:+hx711SckPin.value,calibrationFactor:+calibrationFactor.value,tareOffset:+tareOffset.value,thresholdKg:+weightThresholdKg.value,significantChangeKg:+significantWeightChangeKg.value},
     environment:{temperatureEnabled:temperatureEnabled.value === 'true',humidityEnabled:humidityEnabled.value === 'true',combinedType:thSensorType.value,combinedPin:+thSensorPin.value,temperatureType:temperatureSensorType.value,temperaturePin:+temperatureSensorPin.value,humidityType:humiditySensorType.value,humidityPin:+humiditySensorPin.value},
     hall:{enabled:hallEnabled.value === 'true',pin:+hallPin.value,openLevelHigh:hallOpenLevelHigh.value === 'true',wakeMode:hallWakeMode.value},
@@ -235,6 +235,11 @@ async function saveConfig() {
     measurementIntervalSeconds:+measurementIntervalSeconds.value,
     deepSleepEnabled:deepSleepEnabled.value === 'true'
   };
+  if (deviceToken.value) next.deviceToken = deviceToken.value;
+  if (adminPassword.value) next.adminPassword = adminPassword.value;
+  if (wifiPassword.value) next.wifi.password = wifiPassword.value;
+  if (apPassword.value) next.wifi.apPassword = apPassword.value;
+  if (mqttPassword.value) next.mqtt.password = mqttPassword.value;
   await requestAction('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(next)},'Настройки сохранены');
 }
 async function tare(){ await requestAction('/api/tare',{method:'POST'},'Тара сохранена'); }
@@ -252,7 +257,7 @@ load(); setInterval(load, 10000);
 
 void WebPortal::handleConfigGet() {
     if (!authenticated()) return sendUnauthorized();
-    server_.send(200, "application/json", configManager_.toJson(true));
+    server_.send(200, "application/json", configManager_.toJson(false));
 }
 
 void WebPortal::handleConfigPost() {
