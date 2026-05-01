@@ -58,6 +58,14 @@ int platformDefaultHallPin() {
 #endif
 }
 
+int platformDefaultFactoryResetPin() {
+#if defined(HIVE_PLATFORM_ESP8266)
+    return D6;
+#else
+    return 12;
+#endif
+}
+
 void platformRestart() {
     ESP.restart();
 }

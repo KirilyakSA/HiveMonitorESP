@@ -19,6 +19,9 @@ void HiveMonitorApp::setup() {
     Serial.println("HiveMonitor firmware " HIVE_FW_VERSION);
 
     setupFileSystem();
+    if (handleFactoryResetButton()) {
+        return;
+    }
     if (!configManager_.begin()) {
         Serial.println("Config load failed, using defaults");
         configManager_.resetDefaults();
@@ -82,6 +85,32 @@ void HiveMonitorApp::setupFileSystem() {
         HIVE_FS.begin(true);
 #endif
     }
+}
+
+bool HiveMonitorApp::handleFactoryResetButton() {
+    int pin = platformDefaultFactoryResetPin();
+    pinMode(pin, INPUT_PULLUP);
+    delay(20);
+    if (digitalRead(pin) != LOW) {
+        return false;
+    }
+
+    Serial.println("Factory reset button detected; keep holding for 5 seconds...");
+    uint32_t started = millis();
+    while (millis() - started < 5000) {
+        if (digitalRead(pin) != LOW) {
+            Serial.println("Factory reset cancelled");
+            return false;
+        }
+        delay(100);
+        yield();
+    }
+
+    Serial.println("Factory reset confirmed; resetting config");
+    configManager_.resetDefaults();
+    delay(500);
+    platformRestart();
+    return true;
 }
 
 void HiveMonitorApp::setupWifi() {

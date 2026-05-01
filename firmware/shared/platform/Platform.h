@@ -37,5 +37,6 @@ int platformDefaultHx711DoutPin();
 int platformDefaultHx711SckPin();
 int platformDefaultEnvironmentPin();
 int platformDefaultHallPin();
+int platformDefaultFactoryResetPin();
 void platformRestart();
 void platformDeepSleepSeconds(uint32_t seconds);

@@ -41,6 +41,7 @@ private:
     String appliedApPassword_;
 
     void setupFileSystem();
+    bool handleFactoryResetButton();
     void setupWifi();
     void startAccessPoint();
     void applyConfigChanges();
