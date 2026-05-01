@@ -205,13 +205,36 @@ void HiveMonitorApp::enterDeepSleepIfEnabled() {
     uint32_t sleepSeconds = cfg.measurementIntervalSeconds;
     if (sleepSeconds == 0) sleepSeconds = 1800;
 
-    mqttService_.loop(cfg);
-    delay(150);
+    waitForTelemetryDelivery(10000);
     Serial.print("Deep sleep for ");
     Serial.print(sleepSeconds);
     Serial.println(" seconds");
     Serial.flush();
     platformDeepSleepSeconds(sleepSeconds);
+}
+
+bool HiveMonitorApp::waitForTelemetryDelivery(uint32_t timeoutMs) {
+    const AppConfig& cfg = configManager_.data();
+    if (WiFi.status() != WL_CONNECTED || cfg.mqttHost.length() == 0) {
+        return false;
+    }
+
+    uint32_t started = millis();
+    do {
+        mqttService_.loop(cfg);
+        if (mqttService_.connected()) {
+            bool allSent = telemetryBuffer_.flushTo([this](const String& line) {
+                return mqttService_.publishTelemetry(configManager_.data(), line);
+            });
+            if (allSent && telemetryBuffer_.pendingCount() == 0) {
+                return true;
+            }
+        }
+        delay(100);
+        yield();
+    } while (millis() - started < timeoutMs);
+
+    return false;
 }
 
 void HiveMonitorApp::handleMqttMessage(const String& topic, const String& payload) {

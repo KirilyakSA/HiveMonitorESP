@@ -13,6 +13,7 @@ void MqttService::begin(const AppConfig& config) {
     }
     mqtt_.setServer(config.mqttHost.c_str(), config.mqttPort);
     mqtt_.setBufferSize(1024);
+    lastConnectAttemptMs_ = 0;
     mqtt_.setCallback([this](char* topic, uint8_t* payload, unsigned int length) {
         handleMessage(topic, payload, length);
     });
@@ -64,7 +65,7 @@ void MqttService::handleMessage(char* topic, uint8_t* payload, unsigned int leng
 bool MqttService::ensureConnected(const AppConfig& config) {
     if (mqtt_.connected()) return true;
     if (config.mqttHost.length() == 0 || config.deviceId.length() == 0) return false;
-    if (millis() - lastConnectAttemptMs_ < 5000) return false;
+    if (lastConnectAttemptMs_ != 0 && millis() - lastConnectAttemptMs_ < 5000) return false;
     lastConnectAttemptMs_ = millis();
 
     if (useTls_ != config.mqttTls) {

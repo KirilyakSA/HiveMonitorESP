@@ -48,6 +48,7 @@ private:
     bool wifiConfigChanged() const;
     void measureAndSend();
     void enterDeepSleepIfEnabled();
+    bool waitForTelemetryDelivery(uint32_t timeoutMs);
     void handleMqttMessage(const String& topic, const String& payload);
     bool handleMqttCommand(const String& command, JsonVariantConst data, String& message);
     bool handleMqttConfigUpdate(JsonVariantConst data, String& message);
