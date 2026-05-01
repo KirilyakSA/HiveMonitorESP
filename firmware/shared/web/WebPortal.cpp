@@ -259,6 +259,11 @@ void WebPortal::handleStatus() {
         doc["telemetry"]["temperature"] = serialized(jsonNumber(latestTelemetry_->temperature));
         doc["telemetry"]["humidity"] = serialized(jsonNumber(latestTelemetry_->humidity));
         doc["telemetry"]["hiveOpened"] = latestTelemetry_->hiveOpened;
+        doc["telemetry"]["errorFlag"] = latestTelemetry_->errorFlag;
+        doc["telemetry"]["weightError"] = latestTelemetry_->weightError;
+        doc["telemetry"]["temperatureError"] = latestTelemetry_->temperatureError;
+        doc["telemetry"]["humidityError"] = latestTelemetry_->humidityError;
+        doc["telemetry"]["batteryError"] = latestTelemetry_->batteryError;
         doc["telemetry"]["batteryPercent"] = latestTelemetry_->batteryPercent;
         doc["telemetry"]["batteryVoltage"] = serialized(jsonNumber(latestTelemetry_->batteryVoltage));
     }

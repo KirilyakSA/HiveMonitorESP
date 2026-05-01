@@ -11,8 +11,11 @@ struct Telemetry {
     float humidity = NAN;
     bool hiveOpened = false;
     bool errorFlag = false;
+    bool weightError = false;
+    bool temperatureError = false;
+    bool humidityError = false;
+    bool batteryError = false;
     int batteryPercent = -1;
     float batteryVoltage = NAN;
     int rssi = 0;
 };
-

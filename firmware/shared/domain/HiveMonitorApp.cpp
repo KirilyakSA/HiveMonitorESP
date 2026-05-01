@@ -159,7 +159,8 @@ void HiveMonitorApp::measureAndSend() {
 
     if (cfg.weightEnabled) {
         latestTelemetry_.weight = loadCell_.readKg(5);
-        if (isnan(latestTelemetry_.weight)) error = true;
+        latestTelemetry_.weightError = isnan(latestTelemetry_.weight);
+        if (latestTelemetry_.weightError) error = true;
         if (!isnan(lastWeightKg_) && !isnan(latestTelemetry_.weight)) {
             latestTelemetry_.weightChange = latestTelemetry_.weight - lastWeightKg_;
         } else {
@@ -169,11 +170,13 @@ void HiveMonitorApp::measureAndSend() {
 
     if (cfg.temperatureEnabled) {
         latestTelemetry_.temperature = environmentSensor_.readTemperature();
-        if (isnan(latestTelemetry_.temperature)) error = true;
+        latestTelemetry_.temperatureError = isnan(latestTelemetry_.temperature);
+        if (latestTelemetry_.temperatureError) error = true;
     }
     if (cfg.humidityEnabled) {
         latestTelemetry_.humidity = environmentSensor_.readHumidity();
-        if (isnan(latestTelemetry_.humidity)) error = true;
+        latestTelemetry_.humidityError = isnan(latestTelemetry_.humidity);
+        if (latestTelemetry_.humidityError) error = true;
     }
     if (cfg.hallEnabled) {
         latestTelemetry_.hiveOpened = hallSensor_.isOpen(cfg);
@@ -182,6 +185,8 @@ void HiveMonitorApp::measureAndSend() {
         BatteryState battery = batteryMonitor_.read(cfg);
         latestTelemetry_.batteryVoltage = battery.voltage;
         latestTelemetry_.batteryPercent = battery.percent;
+        latestTelemetry_.batteryError = isnan(battery.voltage) || battery.percent < 0;
+        if (latestTelemetry_.batteryError) error = true;
     }
 
     latestTelemetry_.errorFlag = error;
@@ -356,6 +361,10 @@ String HiveMonitorApp::telemetryToJson(const Telemetry& telemetry) const {
     doc["humidity"] = serialized(jsonFloat(telemetry.humidity));
     doc["hiveOpened"] = telemetry.hiveOpened;
     doc["errorFlag"] = telemetry.errorFlag;
+    doc["weightError"] = telemetry.weightError;
+    doc["temperatureError"] = telemetry.temperatureError;
+    doc["humidityError"] = telemetry.humidityError;
+    doc["batteryError"] = telemetry.batteryError;
     doc["batteryPercent"] = telemetry.batteryPercent;
     doc["batteryVoltage"] = serialized(jsonFloat(telemetry.batteryVoltage));
     doc["rssi"] = telemetry.rssi;

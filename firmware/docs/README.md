@@ -94,6 +94,10 @@ firmware/
 - `humidity`;
 - `hiveOpened`;
 - `errorFlag`;
+- `weightError`;
+- `temperatureError`;
+- `humidityError`;
+- `batteryError`;
 - `batteryPercent`;
 - `batteryVoltage`;
 - `rssi`;
