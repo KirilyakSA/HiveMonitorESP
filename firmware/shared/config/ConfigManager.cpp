@@ -5,6 +5,7 @@
 namespace {
 const char* CONFIG_PATH = "/config.json";
 const size_t MAX_CONFIG_JSON_BYTES = 4096;
+const uint16_t CURRENT_CONFIG_SCHEMA_VERSION = 1;
 
 const char* toString(TimeSource value) {
     switch (value) {
@@ -47,12 +48,17 @@ bool ConfigManager::begin() {
     if (err) {
         return false;
     }
-    fromDocument(doc);
+    bool migrated = false;
     String error;
+    if (!migrateDocument(doc, migrated, error)) {
+        return false;
+    }
+    fromDocument(doc);
+    config_.schemaVersion = CURRENT_CONFIG_SCHEMA_VERSION;
     if (!validate(error)) {
         return false;
     }
-    return true;
+    return migrated ? save() : true;
 }
 
 AppConfig& ConfigManager::data() {
@@ -100,8 +106,13 @@ bool ConfigManager::updateFromJson(const String& body, String& error) {
         error = err.c_str();
         return false;
     }
+    bool migrated = false;
+    if (!migrateDocument(doc, migrated, error)) {
+        return false;
+    }
     AppConfig previous = config_;
     fromDocument(doc);
+    config_.schemaVersion = CURRENT_CONFIG_SCHEMA_VERSION;
     if (!validate(error)) {
         config_ = previous;
         return false;
@@ -113,11 +124,28 @@ bool ConfigManager::updateFromJson(const String& body, String& error) {
 
 void ConfigManager::applyDefaults() {
     config_ = AppConfig{};
+    config_.schemaVersion = CURRENT_CONFIG_SCHEMA_VERSION;
     config_.deviceId = platformDefaultDeviceId();
     config_.adminPassword = "admin";
 }
 
+bool ConfigManager::migrateDocument(JsonDocument& doc, bool& changed, String& error) const {
+    changed = false;
+    uint16_t schemaVersion = doc["schemaVersion"] | 0;
+    if (schemaVersion > CURRENT_CONFIG_SCHEMA_VERSION) {
+        error = "Config schema is newer than firmware";
+        return false;
+    }
+
+    if (schemaVersion < CURRENT_CONFIG_SCHEMA_VERSION) {
+        doc["schemaVersion"] = CURRENT_CONFIG_SCHEMA_VERSION;
+        changed = true;
+    }
+    return true;
+}
+
 void ConfigManager::fromDocument(JsonDocument& doc) {
+    config_.schemaVersion = doc["schemaVersion"] | config_.schemaVersion;
     config_.deviceId = doc["deviceId"] | config_.deviceId;
     config_.deviceToken = doc["deviceToken"] | config_.deviceToken;
     config_.adminPassword = doc["adminPassword"] | config_.adminPassword;
@@ -175,6 +203,7 @@ void ConfigManager::fromDocument(JsonDocument& doc) {
 }
 
 void ConfigManager::toDocument(JsonDocument& doc, bool includeSecrets) const {
+    doc["schemaVersion"] = CURRENT_CONFIG_SCHEMA_VERSION;
     doc["deviceId"] = config_.deviceId;
     if (includeSecrets) {
         doc["deviceToken"] = config_.deviceToken;

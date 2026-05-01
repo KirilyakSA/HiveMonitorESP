@@ -69,6 +69,7 @@ struct AppConfig {
     float weightThresholdKg = 5.0f;
     float significantWeightChangeKg = 20.0f;
 
+    uint16_t schemaVersion = 1;
     uint32_t configVersion = 1;
     uint32_t updatedAt = 0;
 };

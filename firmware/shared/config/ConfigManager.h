@@ -16,6 +16,7 @@ public:
 private:
     AppConfig config_;
     void applyDefaults();
+    bool migrateDocument(JsonDocument& doc, bool& changed, String& error) const;
     void fromDocument(JsonDocument& doc);
     void toDocument(JsonDocument& doc, bool includeSecrets) const;
     bool validate(String& error) const;
