@@ -35,6 +35,10 @@ private:
     ClearBufferHandler onClearBuffer_;
     BufferPendingHandler onBufferPending_;
     BufferSizeHandler onBufferSize_;
+    bool updateInProgress_ = false;
+    bool updateOk_ = false;
+    size_t updateBytes_ = 0;
+    String updateError_;
 
     bool authenticated();
     void sendUnauthorized();
@@ -49,4 +53,5 @@ private:
     void handleRestart();
     void handleUpdateForm();
     void handleUpdateUpload();
+    void failUpdate(const String& message);
 };

@@ -55,10 +55,14 @@ void WebPortal::begin(
         "/update",
         HTTP_POST,
         [this]() {
-            bool ok = !Update.hasError();
-            server_.send(200, "text/plain; charset=utf-8", ok ? "Обновление загружено. Перезагрузка..." : "Ошибка обновления");
-            delay(800);
-            if (ok) platformRestart();
+            if (updateOk_) {
+                server_.send(200, "text/plain; charset=utf-8", "Обновление загружено. Перезагрузка...");
+                delay(800);
+                platformRestart();
+            } else {
+                String message = updateError_.length() > 0 ? updateError_ : "Ошибка обновления";
+                server_.send(500, "text/plain; charset=utf-8", message);
+            }
         },
         [this]() { handleUpdateUpload(); }
     );
@@ -328,10 +332,42 @@ void WebPortal::handleUpdateUpload() {
     if (!authenticated()) return;
     HTTPUpload& upload = server_.upload();
     if (upload.status == UPLOAD_FILE_START) {
-        beginFirmwareUpdate();
+        updateInProgress_ = true;
+        updateOk_ = false;
+        updateBytes_ = 0;
+        updateError_ = "";
+        if (!beginFirmwareUpdate()) {
+            failUpdate("Не удалось начать обновление");
+        }
     } else if (upload.status == UPLOAD_FILE_WRITE) {
-        Update.write(upload.buf, upload.currentSize);
+        if (!updateInProgress_ || updateError_.length() > 0) return;
+        size_t written = Update.write(upload.buf, upload.currentSize);
+        updateBytes_ += written;
+        if (written != upload.currentSize) {
+            failUpdate("Ошибка записи прошивки");
+        }
     } else if (upload.status == UPLOAD_FILE_END) {
-        Update.end(true);
+        if (!updateInProgress_ || updateError_.length() > 0) return;
+        if (updateBytes_ == 0) {
+            failUpdate("Файл прошивки пустой");
+            return;
+        }
+        if (!Update.end(true)) {
+            failUpdate("Ошибка завершения обновления");
+            return;
+        }
+        updateInProgress_ = false;
+        updateOk_ = !Update.hasError();
+        if (!updateOk_) {
+            updateError_ = "Ошибка проверки прошивки";
+        }
+    } else if (upload.status == UPLOAD_FILE_ABORTED) {
+        failUpdate("Загрузка прошивки прервана");
     }
+}
+
+void WebPortal::failUpdate(const String& message) {
+    updateInProgress_ = false;
+    updateOk_ = false;
+    updateError_ = message;
 }
