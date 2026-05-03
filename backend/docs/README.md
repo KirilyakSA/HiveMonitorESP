@@ -8,8 +8,25 @@ Backend принимает телеметрию IoT-устройств, хран
 
 - Go;
 - PostgreSQL;
+- chi;
+- pgx;
+- goose;
+- NATS + JetStream;
 - MQTT broker;
 - Docker/Docker Compose для запуска сервисов.
+
+## Реализация MVP
+
+Первый backend-инкремент находится в:
+
+```text
+cmd/api-service
+cmd/mqtt-ingestion-service
+internal/
+migrations/
+```
+
+Запуск инфраструктуры описан в `backend/README.md` и `deploy/docker-compose.yml`.
 
 ## Основные функции
 
