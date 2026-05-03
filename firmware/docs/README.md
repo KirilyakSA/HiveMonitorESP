@@ -1,5 +1,7 @@
 # Firmware
 
+Смежный документ: [ТЗ backend HiveMonitor](backend-requirements.md).
+
 ## Назначение
 
 Подпроект `firmware/` содержит прошивки для IoT-устройств HiveMonitor на ESP8266 и ESP32.
