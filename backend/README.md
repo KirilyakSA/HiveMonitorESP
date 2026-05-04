@@ -2,61 +2,61 @@
 
 Go backend HiveMonitor.
 
-## MVP stack
+## Стек MVP
 
 - Go + chi;
 - PostgreSQL + pgx;
-- goose migrations;
+- миграции goose;
 - NATS + JetStream;
-- Mosquitto MQTT broker;
-- Docker Compose for local/VPS deployment.
+- MQTT broker Mosquitto;
+- Docker Compose для локального запуска и развертывания на VPS.
 
-## Services
+## Сервисы
 
 ```text
-cmd/api-service              REST API for web/mobile
-cmd/mqtt-ingestion-service   MQTT telemetry consumer
+cmd/api-service              REST API для web/mobile
+cmd/mqtt-ingestion-service   MQTT consumer телеметрии
 ```
 
-## Local run
+## Локальный запуск
 
-Start infrastructure from repository root:
+Запустить инфраструктуру из корня репозитория:
 
 ```bash
 docker compose -f deploy/docker-compose.yml up -d postgres nats mosquitto
 ```
 
-Run migrations:
+Применить миграции:
 
 ```bash
 cd backend
 go run github.com/pressly/goose/v3/cmd/goose@latest -dir migrations postgres "$DATABASE_URL" up
 ```
 
-Run API:
+Запустить API:
 
 ```bash
 go run ./cmd/api-service
 ```
 
-Run MQTT ingestion:
+Запустить MQTT ingestion:
 
 ```bash
 go run ./cmd/mqtt-ingestion-service
 ```
 
-## Implemented MVP slice
+## Реализованный MVP-срез
 
-- email/password registration and login;
+- регистрация и вход по email/password;
 - JWT access token;
-- organizations;
-- apiaries;
-- hives;
-- unassigned device list;
-- device assignment to hive with old telemetry import mode;
-- MQTT ingestion for current firmware topic `hives/{deviceId}/telemetry`;
-- raw payload storage;
-- dynamic sensor readings;
-- latest/history telemetry endpoints.
+- организации;
+- пасеки;
+- ульи;
+- список непривязанных устройств;
+- привязка устройства к улью с режимом импорта старой телеметрии;
+- MQTT ingestion для текущего firmware topic `hives/{deviceId}/telemetry`;
+- хранение raw payload;
+- динамические sensor readings;
+- endpoints последней и исторической телеметрии.
 
-Detailed documentation: [backend/docs](docs/README.md).
+Подробная документация: [backend/docs](docs/README.md).
