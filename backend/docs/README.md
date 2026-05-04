@@ -28,6 +28,8 @@ migrations/
 
 Запуск инфраструктуры описан в `backend/README.md` и `deploy/docker-compose.yml`.
 
+Подробное описание архитектуры backend, сервисов, файлов и данных: [architecture.md](architecture.md).
+
 ## Основные функции
 
 - Прием MQTT-телеметрии.
