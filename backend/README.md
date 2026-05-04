@@ -30,7 +30,7 @@ docker compose -f deploy/docker-compose.yml up -d postgres nats mosquitto
 
 ```bash
 cd backend
-go run github.com/pressly/goose/v3/cmd/goose@latest -dir migrations postgres "$DATABASE_URL" up
+go run github.com/pressly/goose/v3/cmd/goose -dir migrations postgres "$DATABASE_URL" up
 ```
 
 Запустить API:
@@ -55,6 +55,7 @@ go run ./cmd/mqtt-ingestion-service
 - список непривязанных устройств;
 - привязка устройства к улью с режимом импорта старой телеметрии;
 - MQTT ingestion для текущего firmware topic `hives/{deviceId}/telemetry`;
+- MQTT ingestion для целевого topic `apiaries/{apiary_id}/devices/{device_id}/telemetry`;
 - хранение raw payload;
 - динамические sensor readings;
 - endpoints последней и исторической телеметрии.

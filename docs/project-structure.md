@@ -20,6 +20,7 @@ docs/
   architecture.md              Архитектура
   project-structure.md         Структура репозитория
   mvp.md                       Состав MVP
+  implementation-status.md     Статус реализации и соответствие ТЗ
   references/                  Исходные PDF/OneNote заметки
 ```
 

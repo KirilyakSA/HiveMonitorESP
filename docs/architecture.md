@@ -1,89 +1,178 @@
 # Архитектура HiveMonitor
 
-## Общая схема
+## Общая модель
+
+HiveMonitor - система мониторинга пасек и ульев. Главный пользовательский объект - пасека и улей, а IoT-устройство является заменяемым источником данных.
 
 ```text
-IoT-устройство ESP8266/ESP32
-  -> MQTT broker
-  -> Backend Go
-  -> PostgreSQL
-  -> Web UI / Mobile apps
+Organization / аккаунт
+  -> пользователи и роли
+  -> пасеки
+      -> ульи
+          -> устройства
+          -> телеметрия
+          -> события
+          -> задачи
+          -> теги
+      -> метеостанция / погодный provider
+      -> уведомления
+      -> схема расположения ульев
 ```
-
-Backend также отправляет уведомления пользователям и хранит конфигурации устройств.
 
 ## Компоненты
 
-### IoT-устройство
+```text
+ESP8266/ESP32 firmware
+  -> MQTT broker
+  -> mqtt-ingestion-service
+  -> PostgreSQL
+  -> api-service
+  -> Web UI / Mobile apps
 
-Устройство устанавливается на улей и выполняет:
+NATS + JetStream
+  -> async events between backend services
+```
+
+## Firmware
+
+Прошивка отвечает за:
 
 - измерение веса;
-- измерение температуры и влажности;
+- измерение температуры и влажности, если датчики включены;
 - фиксацию открытия улья датчиком Холла;
-- измерение батареи в процентах и вольтах;
-- локальное хранение данных при отсутствии связи;
-- отправку телеметрии через MQTT;
+- измерение батареи;
 - локальную настройку через web-интерфейс;
-- локальное обновление прошивки через web-интерфейс.
+- локальный буфер телеметрии в LittleFS;
+- публикацию телеметрии и событий в MQTT;
+- прием MQTT-команд `measure`, `restart`, `tare`, `clearBuffer`, `configUpdate`;
+- локальное web-обновление прошивки.
 
-### MQTT broker
-
-MQTT broker принимает сообщения устройств и передает их backend.
-
-Структура топиков:
+Текущая firmware публикует legacy topics:
 
 ```text
 hives/{deviceId}/telemetry
 hives/{deviceId}/events
 hives/{deviceId}/status
+```
+
+И подписывается на:
+
+```text
 hives/{deviceId}/commands
 hives/{deviceId}/config
 ```
 
-Для MVP команды от backend к устройству могут быть не реализованы, но топики должны быть предусмотрены.
+## Backend
 
-### Backend
+Backend реализуется на Go и PostgreSQL.
 
-Backend реализуется на Go и использует PostgreSQL.
+Текущие процессы:
 
-Основные задачи:
+- `api-service` - REST API для web/mobile;
+- `mqtt-ingestion-service` - прием MQTT-телеметрии.
 
-- прием телеметрии;
-- проверка `deviceId` + `deviceToken`;
-- сохранение измерений;
-- расчет событий;
-- хранение конфигураций;
-- API для web и mobile;
-- уведомления.
+Текущая backend-реализация поддерживает два формата telemetry topics:
 
-### Web
+```text
+hives/+/telemetry
+apiaries/+/devices/+/telemetry
+```
 
-Web-интерфейс системы реализуется как SPA на React + TypeScript + Vite.
+`hives/+/telemetry` нужен для совместимости с текущей firmware.
 
-### Mobile
+`apiaries/+/devices/+/telemetry` - целевой topic для provisioning по пасеке: backend получает `apiary_id` из topic и может автоматически показать устройство в списке непривязанных устройств пасеки.
 
-Мобильные приложения реализуются на React Native + TypeScript.
+## MQTT и provisioning
 
-### Deploy
+Последнее продуктовое требование: MQTT credentials выдаются на уровне пасеки. После factory reset устройство поднимает собственную AP, пользователь вводит Wi-Fi и MQTT credentials пасеки через локальный web-интерфейс устройства.
 
-Развертывание проектируется по подходу Docker-first. Основной ожидаемый сценарий размещения - VPS или выделенный сервер.
+Текущее состояние:
+
+- firmware умеет хранить `mqttUser` и `mqttPassword`, что совместимо с credentials пасеки;
+- firmware пока публикует только legacy topic `hives/{deviceId}/telemetry`;
+- backend умеет принимать legacy topic, но без `apiary_id` ему нужен `DEFAULT_APIARY_ID` для dev/MVP или предварительная привязка устройства;
+- backend уже умеет принимать целевой topic `apiaries/{apiary_id}/devices/{device_id}/telemetry`;
+- перевод firmware на целевой topic требует отдельного firmware-инкремента: добавить `apiaryId` или topic prefix в конфигурацию устройства.
+
+Поле `deviceToken` в firmware остается legacy/fallback секретом локальной конфигурации. В актуальной backend-архитектуре MVP оно не является основным способом авторизации устройства.
+
+## Телеметрия
+
+Firmware публикует плоский JSON:
+
+```json
+{
+  "schemaVersion": 1,
+  "firmwareVersion": "1.0.0",
+  "configVersion": 1,
+  "deviceId": "device-1",
+  "timestamp": "2026-05-04T00:00:00Z",
+  "measurementIntervalSeconds": 1800,
+  "weight": 42.5,
+  "weightChange": 0.3,
+  "temperature": 34.2,
+  "humidity": 61.5,
+  "hiveOpened": false,
+  "batteryPercent": 87,
+  "batteryVoltage": 3.91,
+  "rssi": -55
+}
+```
+
+Backend нормализует данные в `sensor_readings`:
+
+```text
+metric_type
+value
+unit
+measured_at
+device_id
+apiary_id
+hive_id
+```
+
+Backend также сохраняет raw payload в `raw_payloads`.
+
+## Состояние связи
+
+Для спящих устройств обычный `offline` не является аварией. Актуальная логика предупреждений должна строиться на пропущенных плановых передачах:
+
+```text
+expected_next_telemetry_at
+missed_telemetry_count
+telemetry_interval_minutes
+```
+
+Порог по умолчанию: 5 пропущенных передач.
+
+## Целевые backend-сервисы
+
+Текущий MVP:
+
+- `api-service`;
+- `mqtt-ingestion-service`.
+
+Следующие сервисы/модули по ТЗ:
+
+- `command-service` для MQTT-команд устройствам;
+- `notification-service` для push/Telegram/in-app;
+- `scheduler-service` для напоминаний, повторяющихся задач и проверки пропущенной телеметрии;
+- `weather-service` для метеостанций и внешних погодных API;
+- `ota-service` для firmware rollout;
+- `ai-service` для premium аналитики.
 
 ## Безопасность
 
-- Пользователи авторизуются в backend.
-- Устройства авторизуются через `deviceId` + `deviceToken`.
-- Токены не должны храниться на сервере в открытом виде.
-- MQTT должен поддерживать режимы с TLS и без TLS.
-- Для публичного продакшена TLS рекомендуется как обязательный режим.
-- Локальный web-интерфейс устройства защищается паролем администратора устройства.
+- Пользователи авторизуются через backend.
+- MVP backend уже поддерживает email/password и JWT access token.
+- Google/Apple OAuth, SMS и 2FA переносятся на следующие инкременты.
+- MQTT credentials должны выдаваться на уровне пасеки.
+- В локальной dev-конфигурации Mosquitto разрешает anonymous access; production-конфигурация должна включить ACL, TLS и secrets.
+- Секреты не должны храниться в репозитории.
 
-## Мультиязычность
+## Документация по деталям
 
-Web-интерфейс системы и мобильные приложения должны поддерживать:
-
-- русский;
-- украинский;
-- английский.
-
-Локальный web-интерфейс устройства в MVP может быть одноязычным на русском языке.
+- Backend: [../backend/docs/README.md](../backend/docs/README.md)
+- Backend architecture: [../backend/docs/architecture.md](../backend/docs/architecture.md)
+- Firmware: [../firmware/docs/README.md](../firmware/docs/README.md)
+- MVP status: [implementation-status.md](implementation-status.md)

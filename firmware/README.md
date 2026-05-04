@@ -45,4 +45,6 @@ firmware/
 - события в `hives/{deviceId}/events`;
 - буферизация телеметрии в LittleFS при отсутствии связи.
 
+Важно: backend MVP также поддерживает целевой topic `apiaries/{apiary_id}/devices/{device_id}/telemetry`, но firmware пока публикует legacy topic `hives/{deviceId}/telemetry`. Для автоматического provisioning по пасеке нужен следующий firmware-инкремент с `apiaryId` или настраиваемым topic prefix.
+
 Детальная документация: [firmware/docs](docs/README.md).

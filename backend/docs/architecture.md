@@ -169,6 +169,32 @@ apiaries/+/devices/+/telemetry
 
 Второй topic предпочтителен для backend MVP, потому что содержит `apiary_id` и позволяет автоматически положить новое устройство в список непривязанных устройств конкретной пасеки.
 
+### 4.3 Совместимость с текущей firmware
+
+Текущая firmware публикует:
+
+```text
+hives/{deviceId}/telemetry
+hives/{deviceId}/events
+hives/{deviceId}/status
+```
+
+И подписывается на:
+
+```text
+hives/{deviceId}/commands
+hives/{deviceId}/config
+```
+
+Backend MVP сейчас обрабатывает только telemetry. `events`, `status`, `commands` и `config` являются следующими backend-инкрементами.
+
+Для legacy telemetry topic `hives/{deviceId}/telemetry` в topic нет `apiary_id`. Поэтому есть два рабочих сценария:
+
+- задать `DEFAULT_APIARY_ID` для dev/MVP;
+- принимать устройство без пасеки как диагностическое до будущего firmware-инкремента.
+
+Целевой сценарий - firmware публикует `apiaries/{apiary_id}/devices/{device_id}/telemetry`. Для этого в firmware нужно добавить `apiaryId` или настраиваемый topic prefix.
+
 ## 5. Структура файлов backend
 
 ```text
@@ -1015,13 +1041,15 @@ GET /hives/{id}/telemetry/history
 
 Рекомендуемый порядок следующих инкрементов:
 
-1. Добавить refresh tokens и user sessions.
-2. Вынести permission checks в отдельный слой.
-3. Добавить API для device commands.
-4. Добавить базовые `events` и `alerts`.
-5. Сделать alert rule: пропущенные передачи, низкая батарея, резкое изменение веса.
-6. Добавить notification records без реальной доставки.
-7. Добавить tasks/reminders.
-8. Добавить weather provider abstraction.
-9. Добавить OTA модели и endpoints.
-10. Добавить партиционирование telemetry перед production-нагрузкой.
+1. Добавить `apiaryId` или topic prefix в firmware.
+2. Добавить backend ingestion для `hives/{deviceId}/events` и `hives/{deviceId}/status`.
+3. Добавить API для device commands и MQTT publish в firmware topics.
+4. Добавить refresh tokens и user sessions.
+5. Вынести permission checks в отдельный слой.
+6. Добавить базовые `events`, `hive_tags`, `alerts`.
+7. Сделать alert rule: пропущенные передачи, низкая батарея, резкое изменение веса.
+8. Добавить notification records без реальной доставки.
+9. Добавить tasks/reminders.
+10. Добавить weather provider abstraction.
+11. Добавить OTA модели и endpoints.
+12. Добавить партиционирование telemetry перед production-нагрузкой.

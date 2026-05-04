@@ -2,18 +2,22 @@
 
 ## Назначение
 
-Backend принимает телеметрию IoT-устройств, хранит данные, управляет пользователями, пасеками, ульями, устройствами, конфигурациями и уведомлениями.
+Backend принимает телеметрию IoT-устройств, хранит данные, управляет пользователями, организациями, пасеками, ульями, устройствами и предоставляет API для web/mobile клиентов.
+
+Подробное описание архитектуры backend, сервисов, файлов и данных: [architecture.md](architecture.md).
+
+Сводка по соответствию реализации и ТЗ: [../../docs/implementation-status.md](../../docs/implementation-status.md).
 
 ## Стек
 
 - Go;
-- PostgreSQL;
 - chi;
+- PostgreSQL;
 - pgx;
 - goose;
 - NATS + JetStream;
-- MQTT broker;
-- Docker/Docker Compose для запуска сервисов.
+- Mosquitto MQTT broker для MVP/dev;
+- Docker/Docker Compose.
 
 ## Реализация MVP
 
@@ -28,103 +32,102 @@ migrations/
 
 Запуск инфраструктуры описан в `backend/README.md` и `deploy/docker-compose.yml`.
 
-Подробное описание архитектуры backend, сервисов, файлов и данных: [architecture.md](architecture.md).
+## Реализовано сейчас
 
-## Основные функции
-
-- Прием MQTT-телеметрии.
-- Проверка `deviceId` + `deviceToken`.
-- Сохранение измерений.
-- Хранение истории без автоматического удаления в MVP.
-- Управление пользователями.
-- Управление пасеками и ульями.
-- Управление устройствами.
+- Email/password регистрация и вход.
+- JWT access token.
+- Organizations.
+- Apiaries.
+- Hives.
+- Список непривязанных устройств.
 - Привязка устройства к улью.
-- Хранение истории привязок устройства.
-- Управление конфигурацией устройства.
-- Расчет событий.
-- Уведомления.
-- API для web и mobile.
-
-## Авторизация устройств
-
-Устройство авторизуется через:
-
-```text
-deviceId + deviceToken
-```
-
-Токен не должен храниться на сервере в открытом виде.
-
-Устройство должно иметь доступ только к своим MQTT-топикам и своим командам.
+- Выбор действия со старой непривязанной телеметрией при привязке:
+  - `attach_to_hive`;
+  - `delete`;
+  - `keep`.
+- Прием MQTT telemetry.
+- Сохранение raw MQTT payload.
+- Нормализация readings в `sensor_readings`.
+- Latest/history telemetry endpoints.
+- Публикация NATS event `telemetry.received`.
 
 ## MQTT
 
-Основной канал телеметрии - MQTT через отдельный broker.
+Backend MVP подписывается на:
 
-TLS должен быть настраиваемым:
+```text
+hives/+/telemetry
+apiaries/+/devices/+/telemetry
+```
 
-- MQTT без TLS;
-- MQTT over TLS.
+`hives/+/telemetry` - совместимость с текущей firmware.
 
-Для публичного продакшена TLS рекомендуется как обязательный режим.
+`apiaries/+/devices/+/telemetry` - целевой topic для provisioning по пасеке.
 
-Топики:
+Текущая firmware публикует только:
 
 ```text
 hives/{deviceId}/telemetry
-hives/{deviceId}/events
-hives/{deviceId}/status
-hives/{deviceId}/commands
-hives/{deviceId}/config
 ```
 
-## API
+Поэтому для автоматического попадания legacy-устройства в конкретную пасеку нужен `DEFAULT_APIARY_ID` или следующий firmware-инкремент с `apiaryId`/topic prefix.
 
-Предварительный список API:
+## Авторизация устройств
 
-- регистрация и вход пользователя;
-- профиль пользователя;
-- CRUD пасек;
-- CRUD ульев;
-- регистрация устройства;
-- привязка устройства к улью;
-- чтение и изменение конфигурации устройства;
-- прием и чтение телеметрии;
-- история измерений;
-- события;
-- настройки уведомлений.
+Актуальное целевое требование: MQTT credentials выдаются на уровне пасеки.
 
-## Конфигурация устройства
+Текущее состояние:
 
-Конфигурация устройства может меняться:
+- firmware поддерживает `mqttUser` и `mqttPassword`;
+- dev Mosquitto в `deploy/docker-compose.yml` пока разрешает anonymous access;
+- production-конфигурация должна добавить users/passwords, ACL и TLS;
+- поле `deviceToken` в firmware остается legacy/fallback секретом, но backend MVP не проверяет `deviceToken`.
 
-- локально на устройстве;
-- через backend;
-- через web-интерфейс системы;
-- через mobile.
+## API MVP
 
-Для конфликтов применяется более новая версия по времени изменения. Опасные или спорные конфликты логируются и показываются пользователю.
+```text
+POST /auth/register
+POST /auth/login
+GET  /me
 
-Для MVP удаленное изменение пинов не обязательно и переносится после MVP.
+GET  /organizations/
+POST /organizations/
 
-## Привязка устройства
+GET  /apiaries/
+POST /apiaries/
+GET  /apiaries/{apiaryID}/hives
+POST /apiaries/{apiaryID}/hives
+GET  /apiaries/{apiaryID}/devices/unassigned
+POST /apiaries/{apiaryID}/devices/{deviceUUID}/assign
 
-Для MVP:
+GET  /hives/{hiveID}/telemetry/latest
+GET  /hives/{hiveID}/telemetry/history
+```
 
-- `deviceId` генерируется устройством из MAC/chip ID;
-- пользователь может изменить `deviceId` локально;
-- `deviceToken` генерируется в web-админке;
-- пользователь вводит `deviceToken` в локальном web-интерфейсе устройства;
-- привязка к улью выполняется вручную в web-админке по `deviceId`.
+## Не реализовано, но требуется по ТЗ
 
-Устройство можно перепривязать к другому улью. История старых привязок и измерений сохраняется.
+- Полная permission matrix для ролей организации и пасеки.
+- Email invitations.
+- Обработка `hives/{deviceId}/events`.
+- Обработка `hives/{deviceId}/status`.
+- MQTT command API/service.
+- Alerts, системные теги и события от alerts.
+- Проверка пропущенных плановых передач.
+- Уведомления push/Telegram/in-app.
+- Tasks, recurring tasks, reminders.
+- Weather providers и метеостанции.
+- Архивация телеметрии.
+- OTA rollout.
+- Tariffs/billing.
+- AI premium functions.
 
-## Уведомления MVP
+## MVP-уведомления
 
-- Открытие улья.
-- Резкое изменение веса.
-- Потеря связи.
-- Восстановление связи.
-- Ошибка датчика.
-- Низкий заряд батареи.
+В актуальной модели для спящих устройств не используем простой `offline` как аварийный сигнал. Правильные MVP alerts:
+
+- устройство пропустило заданное количество плановых передач;
+- низкий заряд батареи;
+- резкое падение веса;
+- температура вне нормы;
+- влажность вне нормы;
+- открытие улья, если включен датчик Холла.

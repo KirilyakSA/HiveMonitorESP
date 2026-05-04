@@ -8,38 +8,98 @@
 
 Развертывание проектируется по подходу Docker-first.
 
-Основной ожидаемый сценарий:
+Текущий сценарий:
 
-- VPS или выделенный сервер.
+- локальный запуск;
+- VPS или выделенный сервер через Docker Compose.
 
-Система не должна быть жестко привязана к конкретному провайдеру.
+Будущий сценарий:
 
-## Сервисы
+- перенос сервисов в Kubernetes по мере роста нагрузки.
 
-Минимальный набор сервисов:
+## Реализованный Docker Compose
 
-- backend Go;
-- PostgreSQL;
-- MQTT broker;
-- web frontend;
-- reverse proxy;
-- сервис push-уведомлений или интеграция с внешним провайдером уведомлений.
+Файл:
 
-## MVP
+```text
+deploy/docker-compose.yml
+```
 
-Для MVP нужно подготовить:
+Сервисы:
 
-- `docker-compose.yml`;
-- переменные окружения;
-- локальный dev-запуск;
-- prod-профиль для VPS/выделенного сервера;
-- volume для PostgreSQL;
-- volume/config для MQTT broker;
-- базовую схему backup PostgreSQL.
+- `postgres` - PostgreSQL 16;
+- `nats` - NATS с JetStream;
+- `mosquitto` - MQTT broker;
+- `api-service` - REST API backend;
+- `mqtt-ingestion-service` - MQTT consumer телеметрии.
 
-## Безопасность
+Порты:
+
+```text
+5432  PostgreSQL
+4222  NATS client
+8222  NATS monitoring
+1883  Mosquitto MQTT
+8080  API
+```
+
+## Mosquitto
+
+Dev-конфигурация:
+
+```text
+deploy/mosquitto/mosquitto.conf
+```
+
+В MVP/dev разрешен anonymous access. Для production нужно заменить на:
+
+- users/passwords;
+- ACL по пасекам и устройствам;
+- TLS;
+- отдельное хранение секретов.
+
+## NATS
+
+NATS запускается с JetStream:
+
+```text
+-js -sd /data
+```
+
+Сейчас backend публикует событие:
+
+```text
+telemetry.received
+```
+
+Будущие сервисы будут использовать NATS для notifications, reminders, alerts, weather polling, OTA и AI jobs.
+
+## PostgreSQL
+
+Для MVP используется один volume:
+
+```text
+postgres-data
+```
+
+Миграции применяются из `backend/migrations` через goose.
+
+## Безопасность production
 
 - TLS для публичного web/API.
-- Настраиваемый TLS для MQTT.
-- Секреты не хранятся в репозитории.
-- Пароли и токены передаются через переменные окружения или secret-хранилище.
+- TLS для MQTT.
+- Закрыть anonymous MQTT.
+- Не хранить secrets в репозитории.
+- Пароли и токены передавать через env vars или secret storage.
+- Добавить backup PostgreSQL.
+- Добавить reverse proxy, например Caddy, Nginx или Traefik.
+
+## Не реализовано
+
+- production profile;
+- reverse proxy;
+- backup jobs;
+- secret storage;
+- object storage;
+- отдельные profiles для dev/prod;
+- Kubernetes manifests.

@@ -119,6 +119,28 @@ firmware/
 
 Калибровка через backend переносится после MVP.
 
+## MQTT topics и совместимость с backend
+
+Текущая firmware публикует legacy topics:
+
+```text
+hives/{deviceId}/telemetry
+hives/{deviceId}/events
+hives/{deviceId}/status
+```
+
+Текущий backend MVP принимает `hives/+/telemetry`, поэтому телеметрия совместима.
+
+Целевой backend topic для provisioning по пасеке:
+
+```text
+apiaries/{apiary_id}/devices/{device_id}/telemetry
+```
+
+Firmware пока не публикует этот topic, потому что в конфигурации устройства еще нет `apiaryId` или `mqttTopicPrefix`. До добавления этой настройки backend может использовать `DEFAULT_APIARY_ID` для dev/MVP или принимать legacy telemetry как диагностическую до ручной привязки.
+
+`mqttUser` и `mqttPassword` в firmware совместимы с последним требованием "общие MQTT credentials на уровне пасеки". Поле `deviceToken` остается legacy/fallback секретом локальной конфигурации, но не является основным backend-MVP способом авторизации устройства.
+
 ## MQTT-команды
 
 Устройство подписывается на:
@@ -188,7 +210,7 @@ firmware/
 - настройка Wi-Fi;
 - настройка MQTT;
 - настройка `deviceId`;
-- ввод `deviceToken`;
+- ввод `deviceToken` как legacy/fallback секрета;
 - выбор модулей;
 - настройка пинов;
 - настройка источника времени;
@@ -245,5 +267,6 @@ Web-интерфейс показывает ошибки сохранения н
 
 После MVP:
 
+- публикация в topic с `apiary_id` или настраиваемым topic prefix;
 - OTA по локальной сети;
 - OTA через backend или сервер обновлений.
