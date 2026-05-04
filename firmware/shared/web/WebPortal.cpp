@@ -127,7 +127,7 @@ void WebPortal::handleIndex() {
     <h2>Настройки</h2>
     <div id="notice" class="notice"></div>
     <fieldset><legend>Устройство</legend><div class="grid">
-      <div><label>Device ID</label><input id="deviceId"></div><div><label>Device Token</label><input id="deviceToken" placeholder="оставить без изменений"></div><div><label>Пароль администратора</label><input id="adminPassword" type="password" placeholder="оставить без изменений"></div>
+      <div><label>Device ID</label><input id="deviceId"></div><div><label>Apiary ID</label><input id="apiaryId"></div><div><label>Device Token</label><input id="deviceToken" placeholder="оставить без изменений"></div><div><label>Пароль администратора</label><input id="adminPassword" type="password" placeholder="оставить без изменений"></div>
     </div></fieldset>
     <fieldset><legend>Wi-Fi и точка доступа</legend><div class="grid">
       <div><label>Wi-Fi SSID</label><input id="wifiSsid"></div><div><label>Wi-Fi пароль</label><input id="wifiPassword" type="password" placeholder="оставить без изменений"></div><div><label>AP пароль восстановления</label><input id="apPassword" type="password" placeholder="оставить без изменений"></div>
@@ -179,6 +179,7 @@ async function load() {
   config = await (await fetch('/api/config')).json();
   status.textContent = JSON.stringify(await (await fetch('/api/status')).json(), null, 2);
   deviceId.value = config.deviceId || '';
+  apiaryId.value = config.apiaryId || '';
   deviceToken.value = '';
   adminPassword.value = '';
   wifiSsid.value = config.wifi?.ssid || '';
@@ -225,6 +226,7 @@ async function load() {
 async function saveConfig() {
   const next = {
     deviceId: deviceId.value,
+    apiaryId: apiaryId.value,
     wifi:{ssid:wifiSsid.value,apFallbackEnabled:true},
     mqtt:{host:mqttHost.value,port:+mqttPort.value,tls:mqttTls.value === 'true',user:mqttUser.value},
     weight:{enabled:weightEnabled.value === 'true',doutPin:+hx711DoutPin.value,sckPin:+hx711SckPin.value,calibrationFactor:+calibrationFactor.value,tareOffset:+tareOffset.value,thresholdKg:+weightThresholdKg.value,significantChangeKg:+significantWeightChangeKg.value},
@@ -280,7 +282,12 @@ void WebPortal::handleStatus() {
     if (!authenticated()) return sendUnauthorized();
 
     JsonDocument doc;
+    const AppConfig& cfg = configManager_.data();
     doc["firmwareVersion"] = HIVE_FW_VERSION;
+    doc["deviceId"] = cfg.deviceId;
+    if (cfg.apiaryId.length() > 0) {
+        doc["apiaryId"] = cfg.apiaryId;
+    }
     doc["ip"] = WiFi.localIP().toString();
     doc["wifiConnected"] = WiFi.status() == WL_CONNECTED;
     doc["rssi"] = WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0;
@@ -292,6 +299,9 @@ void WebPortal::handleStatus() {
     if (onBufferSize_) doc["buffer"]["sizeBytes"] = onBufferSize_();
     if (latestTelemetry_) {
         doc["telemetry"]["deviceId"] = latestTelemetry_->deviceId;
+        if (cfg.apiaryId.length() > 0) {
+            doc["telemetry"]["apiaryId"] = cfg.apiaryId;
+        }
         doc["telemetry"]["timestamp"] = latestTelemetry_->timestamp;
         doc["telemetry"]["weight"] = serialized(jsonNumber(latestTelemetry_->weight));
         doc["telemetry"]["weightChange"] = serialized(jsonNumber(latestTelemetry_->weightChange));

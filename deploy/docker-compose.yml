@@ -61,7 +61,7 @@ services:
       DATABASE_URL: postgres://hivemonitor:hivemonitor@postgres:5432/hivemonitor?sslmode=disable
       NATS_URL: nats://nats:4222
       MQTT_BROKER_URL: tcp://mosquitto:1883
-      MQTT_TELEMETRY_TOPIC: hives/+/telemetry,apiaries/+/devices/+/telemetry
+      MQTT_TELEMETRY_TOPIC: hives/+/telemetry,apiaries/+/devices/+/telemetry,hives/+/events,apiaries/+/devices/+/events,hives/+/status,apiaries/+/devices/+/status
       DEFAULT_TELEMETRY_INTERVAL_MINUTES: "30"
     depends_on:
       postgres:

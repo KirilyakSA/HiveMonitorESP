@@ -59,6 +59,7 @@ type Device struct {
 	FirmwareVersion          string     `json:"firmware_version"`
 	ConfigVersion            *int       `json:"config_version,omitempty"`
 	LastTelemetryAt          *time.Time `json:"last_telemetry_at,omitempty"`
+	LastStatusAt             *time.Time `json:"last_status_at,omitempty"`
 	ExpectedNextTelemetryAt  *time.Time `json:"expected_next_telemetry_at,omitempty"`
 	MissedTelemetryCount     int        `json:"missed_telemetry_count"`
 	TelemetryIntervalMinutes int        `json:"telemetry_interval_minutes"`
@@ -87,4 +88,18 @@ type SensorReading struct {
 	Unit       string    `json:"unit"`
 	MeasuredAt time.Time `json:"measured_at"`
 	ReceivedAt time.Time `json:"received_at"`
+}
+
+type DeviceEvent struct {
+	ID           string    `json:"id"`
+	DeviceID     *string   `json:"device_id,omitempty"`
+	ApiaryID     *string   `json:"apiary_id,omitempty"`
+	HiveID       *string   `json:"hive_id,omitempty"`
+	EventType    string    `json:"event_type"`
+	Message      string    `json:"message"`
+	OK           *bool     `json:"ok,omitempty"`
+	Command      string    `json:"command"`
+	OccurredAt   time.Time `json:"occurred_at"`
+	ReceivedAt   time.Time `json:"received_at"`
+	RawPayloadID *string   `json:"raw_payload_id,omitempty"`
 }

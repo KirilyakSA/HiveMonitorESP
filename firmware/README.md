@@ -41,10 +41,11 @@ firmware/
 - DHT11/DHT21/DHT22;
 - датчик открытия улья;
 - измерение батареи через ADC;
-- JSON-телеметрия в MQTT-топик `hives/{deviceId}/telemetry`;
-- события в `hives/{deviceId}/events`;
+- JSON-телеметрия в MQTT-топик `hives/{deviceId}/telemetry` или `apiaries/{apiaryId}/devices/{deviceId}/telemetry`;
+- события в `hives/{deviceId}/events` или `apiaries/{apiaryId}/devices/{deviceId}/events`;
+- статусы устройства в `hives/{deviceId}/status` или `apiaries/{apiaryId}/devices/{deviceId}/status`;
 - буферизация телеметрии в LittleFS при отсутствии связи.
 
-Важно: backend MVP также поддерживает целевой topic `apiaries/{apiary_id}/devices/{device_id}/telemetry`, но firmware пока публикует legacy topic `hives/{deviceId}/telemetry`. Для автоматического provisioning по пасеке нужен следующий firmware-инкремент с `apiaryId` или настраиваемым topic prefix.
+Если в локальной конфигурации задан `apiaryId`, firmware использует apiary-aware topics для автоматического provisioning по пасеке. Если `apiaryId` пустой, firmware остается в legacy mode `hives/{deviceId}/...`.
 
 Детальная документация: [firmware/docs](docs/README.md).

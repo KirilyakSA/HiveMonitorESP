@@ -46,9 +46,14 @@
 - Импорт или удаление старой непривязанной телеметрии при привязке.
 - MQTT ingestion для:
   - `hives/+/telemetry`;
-  - `apiaries/+/devices/+/telemetry`.
+  - `apiaries/+/devices/+/telemetry`;
+  - `hives/+/events`;
+  - `apiaries/+/devices/+/events`;
+  - `hives/+/status`;
+  - `apiaries/+/devices/+/status`.
 - Сохранение raw payload.
 - Динамические `sensor_readings`.
+- Журнал device events для пасеки и улья.
 - Latest/history telemetry endpoints.
 
 ## Проверенный сценарий
@@ -66,20 +71,22 @@ POST /organizations/
 POST /apiaries/
 POST /apiaries/{id}/hives
 MQTT publish telemetry
+MQTT publish device event/status
 GET /apiaries/{id}/devices/unassigned
 POST /apiaries/{id}/devices/{deviceUUID}/assign
 GET /hives/{id}/telemetry/latest
 GET /hives/{id}/telemetry/history
+GET /apiaries/{id}/events
+GET /hives/{id}/events
 ```
 
-Результат: telemetry была принята, устройство создано как `unassigned`, привязано к улью, latest/history вернули readings.
+Результат: telemetry была принята, устройство создано как `unassigned`, привязано к улью, latest/history вернули readings, event/status messages сохраняются.
 
 ## Известные ограничения MVP
 
-- Firmware пока публикует только legacy topic `hives/{deviceId}/telemetry`.
-- Для автоматического помещения устройства в конкретную пасеку нужен целевой topic `apiaries/{apiary_id}/devices/{device_id}/telemetry` или backend `DEFAULT_APIARY_ID`.
+- Legacy mode `hives/{deviceId}/...` остается только для совместимости и dev/MVP.
+- Для production provisioning нужно задавать `apiaryId` в локальной конфигурации firmware и использовать topics `apiaries/{apiary_id}/devices/{device_id}/...`.
 - Backend пока не отправляет MQTT-команды устройствам, хотя firmware их принимает.
-- Backend пока не обрабатывает `hives/{deviceId}/events` и `hives/{deviceId}/status`.
 - Alerts, системные теги, события от alerts и уведомления еще не реализованы.
 - Проверка пропущенных передач еще не реализована.
 - Tasks/reminders еще не реализованы.
@@ -91,10 +98,8 @@ GET /hives/{id}/telemetry/history
 
 Рекомендуемый порядок:
 
-1. Добавить `apiaryId` или configurable topic prefix в firmware.
-2. Добавить backend обработку `events` и `status`.
-3. Добавить `device_commands` API и MQTT publish команд.
-4. Добавить проверку пропущенных передач.
-5. Добавить базовые `alert_rules`, `alerts`, системные теги и события от alerts.
-6. Добавить notification records без реальной доставки.
-7. Добавить задачи, события и напоминания.
+1. Добавить `device_commands` API и MQTT publish команд.
+2. Добавить проверку пропущенных передач.
+3. Добавить базовые `alert_rules`, `alerts`, системные теги и события от alerts.
+4. Добавить notification records без реальной доставки.
+5. Добавить задачи, события и напоминания.

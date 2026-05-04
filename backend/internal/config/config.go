@@ -35,7 +35,7 @@ func Load() Config {
 		MQTTUsername:          env("MQTT_USERNAME", ""),
 		MQTTPassword:          env("MQTT_PASSWORD", ""),
 		MQTTClientID:          env("MQTT_CLIENT_ID", "hivemonitor-mqtt-ingestion"),
-		MQTTTelemetryTopic:    env("MQTT_TELEMETRY_TOPIC", "hives/+/telemetry,apiaries/+/devices/+/telemetry"),
+		MQTTTelemetryTopic:    env("MQTT_TELEMETRY_TOPIC", "hives/+/telemetry,apiaries/+/devices/+/telemetry,hives/+/events,apiaries/+/devices/+/events,hives/+/status,apiaries/+/devices/+/status"),
 		DefaultAPIaryID:       env("DEFAULT_APIARY_ID", ""),
 		DefaultIntervalMinute: envInt("DEFAULT_TELEMETRY_INTERVAL_MINUTES", 30),
 	}

@@ -56,8 +56,10 @@ go run ./cmd/mqtt-ingestion-service
 - привязка устройства к улью с режимом импорта старой телеметрии;
 - MQTT ingestion для текущего firmware topic `hives/{deviceId}/telemetry`;
 - MQTT ingestion для целевого topic `apiaries/{apiary_id}/devices/{device_id}/telemetry`;
+- MQTT ingestion для device events/status в legacy и apiary-aware topics;
 - хранение raw payload;
 - динамические sensor readings;
+- журнал device events на уровне пасеки и улья;
 - endpoints последней и исторической телеметрии.
 
 Подробная документация: [backend/docs](docs/README.md).

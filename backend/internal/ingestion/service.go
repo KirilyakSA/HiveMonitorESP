@@ -74,9 +74,23 @@ func (s *Service) handleMessage(_ mqtt.Client, message mqtt.Message) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	input, err := s.parseTelemetry(message.Topic(), message.Payload())
+	kind := topicKind(message.Topic())
+	switch kind {
+	case "telemetry":
+		s.handleTelemetry(ctx, message.Topic(), message.Payload())
+	case "events":
+		s.handleDeviceEvent(ctx, message.Topic(), message.Payload())
+	case "status":
+		s.handleDeviceStatus(ctx, message.Topic(), message.Payload())
+	default:
+		s.logger.Warn("unsupported mqtt topic", "topic", message.Topic())
+	}
+}
+
+func (s *Service) handleTelemetry(ctx context.Context, topic string, payload []byte) {
+	input, err := s.parseTelemetry(topic, payload)
 	if err != nil {
-		s.logger.Warn("invalid telemetry", "topic", message.Topic(), "error", err)
+		s.logger.Warn("invalid telemetry", "topic", topic, "error", err)
 		return
 	}
 
@@ -95,8 +109,50 @@ func (s *Service) handleMessage(_ mqtt.Client, message mqtt.Message) {
 	s.logger.Info("telemetry ingested", "device_id", input.DeviceID, "readings", len(input.Readings))
 }
 
+func (s *Service) handleDeviceEvent(ctx context.Context, topic string, payload []byte) {
+	input, err := s.parseDeviceEvent(topic, payload)
+	if err != nil {
+		s.logger.Warn("invalid device event", "topic", topic, "error", err)
+		return
+	}
+	event, err := s.repo.IngestDeviceEvent(ctx, input)
+	if err != nil {
+		s.logger.Error("ingest device event", "device_id", input.DeviceID, "error", err)
+		return
+	}
+	_ = s.bus.PublishJSON("device.event.received", map[string]any{
+		"event_id":  event.ID,
+		"device_id": event.DeviceID,
+		"apiary_id": event.ApiaryID,
+		"hive_id":   event.HiveID,
+		"type":      event.EventType,
+	})
+	s.logger.Info("device event ingested", "device_id", input.DeviceID, "event_type", input.EventType)
+}
+
+func (s *Service) handleDeviceStatus(ctx context.Context, topic string, payload []byte) {
+	input, err := s.parseDeviceStatus(topic, payload)
+	if err != nil {
+		s.logger.Warn("invalid device status", "topic", topic, "error", err)
+		return
+	}
+	device, err := s.repo.IngestDeviceStatus(ctx, input)
+	if err != nil {
+		s.logger.Error("ingest device status", "device_id", input.DeviceID, "error", err)
+		return
+	}
+	_ = s.bus.PublishJSON("device.status.received", map[string]any{
+		"device_uuid": device.ID,
+		"device_id":   device.DeviceID,
+		"apiary_id":   device.ApiaryID,
+		"status_at":   input.StatusAt,
+	})
+	s.logger.Info("device status ingested", "device_id", input.DeviceID)
+}
+
 type telemetryPayload struct {
 	SchemaVersion              int              `json:"schemaVersion"`
+	APIaryID                   string           `json:"apiaryId"`
 	DeviceID                   string           `json:"deviceId"`
 	DeviceIDSnake              string           `json:"device_id"`
 	Timestamp                  string           `json:"timestamp"`
@@ -119,6 +175,21 @@ type telemetryPayload struct {
 		Percent *float64 `json:"percent"`
 		Voltage *float64 `json:"voltage"`
 	} `json:"battery"`
+}
+
+type deviceMessagePayload struct {
+	SchemaVersion        int    `json:"schemaVersion"`
+	APIaryID             string `json:"apiaryId"`
+	DeviceID             string `json:"deviceId"`
+	Timestamp            string `json:"timestamp"`
+	FirmwareVersion      string `json:"firmwareVersion"`
+	FirmwareVersionSnake string `json:"firmware_version"`
+	ConfigVersion        *int   `json:"configVersion"`
+	Type                 string `json:"type"`
+	EventType            string `json:"eventType"`
+	Message              string `json:"message"`
+	OK                   *bool  `json:"ok"`
+	Command              string `json:"command"`
 }
 
 type readingPayload struct {
@@ -188,7 +259,7 @@ func (s *Service) parseTelemetry(topic string, payload []byte) (repository.Inges
 		return repository.IngestTelemetryInput{}, errors.New("no readings")
 	}
 
-	apiaryID := firstNonEmpty(apiaryIDFromTopic(topic), s.cfg.DefaultAPIaryID)
+	apiaryID := firstNonEmpty(apiaryIDFromTopic(topic), parsed.APIaryID, s.cfg.DefaultAPIaryID)
 
 	return repository.IngestTelemetryInput{
 		APIaryID:                apiaryID,
@@ -203,12 +274,71 @@ func (s *Service) parseTelemetry(topic string, payload []byte) (repository.Inges
 	}, nil
 }
 
+func (s *Service) parseDeviceEvent(topic string, payload []byte) (repository.IngestDeviceEventInput, error) {
+	var parsed deviceMessagePayload
+	if err := json.Unmarshal(payload, &parsed); err != nil {
+		return repository.IngestDeviceEventInput{}, err
+	}
+	deviceID := firstNonEmpty(parsed.DeviceID, deviceIDFromTopic(topic))
+	if deviceID == "" {
+		return repository.IngestDeviceEventInput{}, errors.New("device id is required")
+	}
+	occurredAt := time.Now().UTC()
+	if parsed.Timestamp != "" {
+		if ts, err := parseTimestamp(parsed.Timestamp); err == nil {
+			occurredAt = ts
+		}
+	}
+	eventType := firstNonEmpty(parsed.EventType, parsed.Type, "device_event")
+	return repository.IngestDeviceEventInput{
+		APIaryID:        firstNonEmpty(apiaryIDFromTopic(topic), parsed.APIaryID, s.cfg.DefaultAPIaryID),
+		DeviceID:        deviceID,
+		DeviceType:      "hive_monitor",
+		FirmwareVersion: firstNonEmpty(parsed.FirmwareVersion, parsed.FirmwareVersionSnake),
+		ConfigVersion:   parsed.ConfigVersion,
+		EventType:       eventType,
+		Message:         parsed.Message,
+		OK:              parsed.OK,
+		Command:         parsed.Command,
+		OccurredAt:      occurredAt,
+		RawPayload:      json.RawMessage(payload),
+		RawTopic:        topic,
+	}, nil
+}
+
+func (s *Service) parseDeviceStatus(topic string, payload []byte) (repository.IngestDeviceStatusInput, error) {
+	var parsed deviceMessagePayload
+	if err := json.Unmarshal(payload, &parsed); err != nil {
+		return repository.IngestDeviceStatusInput{}, err
+	}
+	deviceID := firstNonEmpty(parsed.DeviceID, deviceIDFromTopic(topic))
+	if deviceID == "" {
+		return repository.IngestDeviceStatusInput{}, errors.New("device id is required")
+	}
+	statusAt := time.Now().UTC()
+	if parsed.Timestamp != "" {
+		if ts, err := parseTimestamp(parsed.Timestamp); err == nil {
+			statusAt = ts
+		}
+	}
+	return repository.IngestDeviceStatusInput{
+		APIaryID:        firstNonEmpty(apiaryIDFromTopic(topic), parsed.APIaryID, s.cfg.DefaultAPIaryID),
+		DeviceID:        deviceID,
+		DeviceType:      "hive_monitor",
+		FirmwareVersion: firstNonEmpty(parsed.FirmwareVersion, parsed.FirmwareVersionSnake),
+		ConfigVersion:   parsed.ConfigVersion,
+		StatusAt:        statusAt,
+		RawPayload:      json.RawMessage(payload),
+		RawTopic:        topic,
+	}, nil
+}
+
 func deviceIDFromTopic(topic string) string {
 	parts := strings.Split(topic, "/")
-	if len(parts) >= 3 && parts[0] == "hives" && parts[2] == "telemetry" {
+	if len(parts) >= 3 && parts[0] == "hives" {
 		return parts[1]
 	}
-	if len(parts) >= 5 && parts[0] == "apiaries" && parts[2] == "devices" && parts[4] == "telemetry" {
+	if len(parts) >= 5 && parts[0] == "apiaries" && parts[2] == "devices" {
 		return parts[3]
 	}
 	return ""
@@ -216,8 +346,19 @@ func deviceIDFromTopic(topic string) string {
 
 func apiaryIDFromTopic(topic string) string {
 	parts := strings.Split(topic, "/")
-	if len(parts) >= 5 && parts[0] == "apiaries" && parts[2] == "devices" && parts[4] == "telemetry" {
+	if len(parts) >= 5 && parts[0] == "apiaries" && parts[2] == "devices" {
 		return parts[1]
+	}
+	return ""
+}
+
+func topicKind(topic string) string {
+	parts := strings.Split(topic, "/")
+	if len(parts) >= 3 && parts[0] == "hives" {
+		return parts[2]
+	}
+	if len(parts) >= 5 && parts[0] == "apiaries" && parts[2] == "devices" {
+		return parts[4]
 	}
 	return ""
 }

@@ -147,6 +147,7 @@ bool ConfigManager::migrateDocument(JsonDocument& doc, bool& changed, String& er
 void ConfigManager::fromDocument(JsonDocument& doc) {
     config_.schemaVersion = doc["schemaVersion"] | config_.schemaVersion;
     config_.deviceId = doc["deviceId"] | config_.deviceId;
+    config_.apiaryId = doc["apiaryId"] | config_.apiaryId;
     config_.deviceToken = doc["deviceToken"] | config_.deviceToken;
     config_.adminPassword = doc["adminPassword"] | config_.adminPassword;
 
@@ -205,6 +206,7 @@ void ConfigManager::fromDocument(JsonDocument& doc) {
 void ConfigManager::toDocument(JsonDocument& doc, bool includeSecrets) const {
     doc["schemaVersion"] = CURRENT_CONFIG_SCHEMA_VERSION;
     doc["deviceId"] = config_.deviceId;
+    doc["apiaryId"] = config_.apiaryId;
     if (includeSecrets) {
         doc["deviceToken"] = config_.deviceToken;
         doc["adminPassword"] = config_.adminPassword;
@@ -264,6 +266,10 @@ void ConfigManager::toDocument(JsonDocument& doc, bool includeSecrets) const {
 bool ConfigManager::validate(String& error) const {
     if (config_.deviceId.length() == 0) {
         error = "deviceId is required";
+        return false;
+    }
+    if (config_.apiaryId.indexOf('/') >= 0) {
+        error = "apiaryId must not contain '/'";
         return false;
     }
     if (config_.apPassword.length() > 0 && config_.apPassword.length() < 8) {

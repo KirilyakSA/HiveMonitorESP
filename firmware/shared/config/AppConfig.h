@@ -16,6 +16,7 @@ enum class HallWakeMode : uint8_t {
 
 struct AppConfig {
     String deviceId;
+    String apiaryId;
     String deviceToken;
     String adminPassword;
 

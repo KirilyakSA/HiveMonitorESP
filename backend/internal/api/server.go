@@ -62,11 +62,13 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/{apiaryID}/hives", s.createHive)
 			r.Get("/{apiaryID}/devices/unassigned", s.listUnassignedDevices)
 			r.Post("/{apiaryID}/devices/{deviceUUID}/assign", s.assignDevice)
+			r.Get("/{apiaryID}/events", s.apiaryEvents)
 		})
 
 		r.Route("/hives", func(r chi.Router) {
 			r.Get("/{hiveID}/telemetry/latest", s.latestTelemetry)
 			r.Get("/{hiveID}/telemetry/history", s.telemetryHistory)
+			r.Get("/{hiveID}/events", s.hiveEvents)
 		})
 	})
 
@@ -333,6 +335,26 @@ func (s *Server) telemetryHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, readings)
+}
+
+func (s *Server) apiaryEvents(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	events, err := s.repo.EventsForApiary(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "apiaryID"), limit)
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, events)
+}
+
+func (s *Server) hiveEvents(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	events, err := s.repo.EventsForHive(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "hiveID"), limit)
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, events)
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {

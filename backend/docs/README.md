@@ -46,9 +46,11 @@ migrations/
   - `delete`;
   - `keep`.
 - Прием MQTT telemetry.
+- Прием MQTT device events/status.
 - Сохранение raw MQTT payload.
 - Нормализация readings в `sensor_readings`.
 - Latest/history telemetry endpoints.
+- Apiary/hive event journal endpoints.
 - Публикация NATS event `telemetry.received`.
 
 ## MQTT
@@ -58,19 +60,25 @@ Backend MVP подписывается на:
 ```text
 hives/+/telemetry
 apiaries/+/devices/+/telemetry
+hives/+/events
+apiaries/+/devices/+/events
+hives/+/status
+apiaries/+/devices/+/status
 ```
 
-`hives/+/telemetry` - совместимость с текущей firmware.
+`hives/+/...` - совместимость с legacy firmware topics.
 
-`apiaries/+/devices/+/telemetry` - целевой topic для provisioning по пасеке.
+`apiaries/+/devices/+/...` - целевой topic namespace для provisioning по пасеке.
 
-Текущая firmware публикует только:
+Firmware публикует apiary-aware topics, если в локальной конфигурации задан `apiaryId`. Если `apiaryId` пустой, устройство остается в legacy mode:
 
 ```text
 hives/{deviceId}/telemetry
+hives/{deviceId}/events
+hives/{deviceId}/status
 ```
 
-Поэтому для автоматического попадания legacy-устройства в конкретную пасеку нужен `DEFAULT_APIARY_ID` или следующий firmware-инкремент с `apiaryId`/topic prefix.
+Для автоматического попадания legacy-устройства в конкретную пасеку все еще нужен `DEFAULT_APIARY_ID` или заранее зарегистрированное/привязанное устройство. Production path должен использовать apiary-aware topics.
 
 ## Авторизация устройств
 
@@ -99,17 +107,17 @@ GET  /apiaries/{apiaryID}/hives
 POST /apiaries/{apiaryID}/hives
 GET  /apiaries/{apiaryID}/devices/unassigned
 POST /apiaries/{apiaryID}/devices/{deviceUUID}/assign
+GET  /apiaries/{apiaryID}/events
 
 GET  /hives/{hiveID}/telemetry/latest
 GET  /hives/{hiveID}/telemetry/history
+GET  /hives/{hiveID}/events
 ```
 
 ## Не реализовано, но требуется по ТЗ
 
 - Полная permission matrix для ролей организации и пасеки.
 - Email invitations.
-- Обработка `hives/{deviceId}/events`.
-- Обработка `hives/{deviceId}/status`.
 - MQTT command API/service.
 - Alerts, системные теги и события от alerts.
 - Проверка пропущенных плановых передач.

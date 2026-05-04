@@ -71,16 +71,20 @@ Backend реализуется на Go и PostgreSQL.
 - `api-service` - REST API для web/mobile;
 - `mqtt-ingestion-service` - прием MQTT-телеметрии.
 
-Текущая backend-реализация поддерживает два формата telemetry topics:
+Текущая backend-реализация поддерживает legacy и apiary-aware topics:
 
 ```text
 hives/+/telemetry
 apiaries/+/devices/+/telemetry
+hives/+/events
+apiaries/+/devices/+/events
+hives/+/status
+apiaries/+/devices/+/status
 ```
 
-`hives/+/telemetry` нужен для совместимости с текущей firmware.
+`hives/+/...` нужен для совместимости с legacy firmware mode.
 
-`apiaries/+/devices/+/telemetry` - целевой topic для provisioning по пасеке: backend получает `apiary_id` из topic и может автоматически показать устройство в списке непривязанных устройств пасеки.
+`apiaries/+/devices/+/...` - целевой topic namespace для provisioning по пасеке: backend получает `apiary_id` из topic и может автоматически показать устройство в списке непривязанных устройств пасеки.
 
 ## MQTT и provisioning
 
@@ -89,10 +93,11 @@ apiaries/+/devices/+/telemetry
 Текущее состояние:
 
 - firmware умеет хранить `mqttUser` и `mqttPassword`, что совместимо с credentials пасеки;
-- firmware пока публикует только legacy topic `hives/{deviceId}/telemetry`;
-- backend умеет принимать legacy topic, но без `apiary_id` ему нужен `DEFAULT_APIARY_ID` для dev/MVP или предварительная привязка устройства;
-- backend уже умеет принимать целевой topic `apiaries/{apiary_id}/devices/{device_id}/telemetry`;
-- перевод firmware на целевой topic требует отдельного firmware-инкремента: добавить `apiaryId` или topic prefix в конфигурацию устройства.
+- firmware имеет настройку `apiaryId`;
+- если `apiaryId` задан, firmware публикует `apiaries/{apiary_id}/devices/{device_id}/telemetry|events|status`;
+- если `apiaryId` пустой, firmware остается в legacy mode `hives/{deviceId}/telemetry|events|status`;
+- backend принимает legacy topics только для dev/MVP с `DEFAULT_APIARY_ID` или для уже зарегистрированных устройств;
+- production path должен использовать apiary-aware topics.
 
 Поле `deviceToken` в firmware остается legacy/fallback секретом локальной конфигурации. В актуальной backend-архитектуре MVP оно не является основным способом авторизации устройства.
 

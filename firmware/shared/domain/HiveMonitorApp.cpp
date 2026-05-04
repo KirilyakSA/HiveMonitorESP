@@ -276,8 +276,14 @@ bool HiveMonitorApp::waitForTelemetryDelivery(uint32_t timeoutMs) {
 
 void HiveMonitorApp::handleMqttMessage(const String& topic, const String& payload) {
     const AppConfig& cfg = configManager_.data();
-    String commandsTopic = "hives/" + cfg.deviceId + "/commands";
-    String configTopic = "hives/" + cfg.deviceId + "/config";
+    String legacyCommandsTopic = "hives/" + cfg.deviceId + "/commands";
+    String legacyConfigTopic = "hives/" + cfg.deviceId + "/config";
+    String commandsTopic = legacyCommandsTopic;
+    String configTopic = legacyConfigTopic;
+    if (cfg.apiaryId.length() > 0) {
+        commandsTopic = "apiaries/" + cfg.apiaryId + "/devices/" + cfg.deviceId + "/commands";
+        configTopic = "apiaries/" + cfg.apiaryId + "/devices/" + cfg.deviceId + "/config";
+    }
 
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, payload);
@@ -293,12 +299,12 @@ void HiveMonitorApp::handleMqttMessage(const String& topic, const String& payloa
         data = JsonVariantConst();
     }
 
-    if (topic == configTopic && command.length() == 0) {
+    if ((topic == configTopic || topic == legacyConfigTopic) && command.length() == 0) {
         command = "configUpdate";
         data = doc.as<JsonVariantConst>();
     }
 
-    if (topic != commandsTopic && topic != configTopic) {
+    if (topic != commandsTopic && topic != configTopic && topic != legacyCommandsTopic && topic != legacyConfigTopic) {
         return;
     }
     if (command.length() == 0) {
@@ -370,6 +376,9 @@ void HiveMonitorApp::publishCommandStatus(const String& command, bool ok, const 
     doc["schemaVersion"] = 1;
     doc["firmwareVersion"] = HIVE_FW_VERSION;
     doc["deviceId"] = configManager_.data().deviceId;
+    if (configManager_.data().apiaryId.length() > 0) {
+        doc["apiaryId"] = configManager_.data().apiaryId;
+    }
     doc["timestamp"] = timeService_.isoTimestamp();
     doc["type"] = "commandStatus";
     doc["command"] = command;
@@ -388,6 +397,9 @@ String HiveMonitorApp::telemetryToJson(const Telemetry& telemetry) const {
     doc["firmwareVersion"] = HIVE_FW_VERSION;
     doc["configVersion"] = cfg.configVersion;
     doc["deviceId"] = telemetry.deviceId;
+    if (cfg.apiaryId.length() > 0) {
+        doc["apiaryId"] = cfg.apiaryId;
+    }
     doc["timestamp"] = telemetry.timestamp;
     doc["uptimeSeconds"] = millis() / 1000UL;
     doc["measurementIntervalSeconds"] = cfg.measurementIntervalSeconds;

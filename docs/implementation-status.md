@@ -7,21 +7,21 @@
 Критических конфликтов, которые полностью ломают текущую MVP-вертикаль, не найдено. Текущая связка работает так:
 
 ```text
-firmware -> hives/{deviceId}/telemetry -> mqtt-ingestion-service -> sensor_readings
+firmware -> hives/{deviceId}/... или apiaries/{apiaryId}/devices/{deviceId}/... -> mqtt-ingestion-service
 ```
 
-Главное несоответствие последним требованиям: целевая модель provisioning по пасеке требует topic с `apiary_id`, а firmware пока публикует только legacy topic без `apiary_id`.
+Главное несоответствие по provisioning закрыто на уровне firmware/backend контракта: firmware умеет публиковать apiary-aware topics через настройку `apiaryId`, а backend принимает telemetry/events/status в этом namespace. Legacy topics остаются compatibility mode.
 
 ## P0 backlog в GitHub Issues
 
 По итогам ревизии несоответствия вынесены в GitHub Issues с высшим приоритетом:
 
-- Firmware: [#15](https://github.com/KirilyakSA/HiveMonitorESP/issues/15) - привести MQTT topics к модели пасек.
-- Backend: [#16](https://github.com/KirilyakSA/HiveMonitorESP/issues/16) - ingest device events.
-- Backend: [#17](https://github.com/KirilyakSA/HiveMonitorESP/issues/17) - ingest device status.
+- Firmware: [#15](https://github.com/KirilyakSA/HiveMonitorESP/issues/15) - привести MQTT topics к модели пасек. Реализовано в коде, issue можно закрывать после review.
+- Backend: [#16](https://github.com/KirilyakSA/HiveMonitorESP/issues/16) - ingest device events. Реализовано в коде, issue можно закрывать после review.
+- Backend: [#17](https://github.com/KirilyakSA/HiveMonitorESP/issues/17) - ingest device status. Реализовано в коде, issue можно закрывать после review.
 - Backend: [#18](https://github.com/KirilyakSA/HiveMonitorESP/issues/18) - command API для текущей firmware.
 - Backend: [#19](https://github.com/KirilyakSA/HiveMonitorESP/issues/19) - alerts по пропущенным передачам вместо простого offline.
-- Backend: [#20](https://github.com/KirilyakSA/HiveMonitorESP/issues/20) - production provisioning без `DEFAULT_APIARY_ID`.
+- Backend: [#20](https://github.com/KirilyakSA/HiveMonitorESP/issues/20) - production provisioning без `DEFAULT_APIARY_ID`. Реализовано в коде, issue можно закрывать после review.
 - Deploy: [#21](https://github.com/KirilyakSA/HiveMonitorESP/issues/21) - закрыть anonymous MQTT в production profile.
 - Deploy: [#22](https://github.com/KirilyakSA/HiveMonitorESP/issues/22) - TLS/reverse proxy план для VPS.
 - Deploy: [#23](https://github.com/KirilyakSA/HiveMonitorESP/issues/23) - backup/restore PostgreSQL.
@@ -37,6 +37,8 @@ firmware -> hives/{deviceId}/telemetry -> mqtt-ingestion-service -> sensor_readi
 
 - Firmware публикует `hives/{deviceId}/telemetry`.
 - Backend подписан на `hives/+/telemetry`.
+- Firmware публикует apiary-aware topics `apiaries/{apiaryId}/devices/{deviceId}/telemetry|events|status`, если задан `apiaryId`.
+- Backend подписан на apiary-aware telemetry/events/status topics.
 - Firmware payload содержит поля, которые backend парсит:
   - `deviceId`;
   - `timestamp`;
@@ -53,13 +55,11 @@ firmware -> hives/{deviceId}/telemetry -> mqtt-ingestion-service -> sensor_readi
   - `rssi`;
   - `freeHeap`.
 - Backend сохраняет raw payload и нормализованные readings.
+- Backend сохраняет device events и обновляет `last_status_at` по status messages.
 - Firmware поддерживает `mqttUser` и `mqttPassword`, что совместимо с идеей credentials на уровне пасеки.
 
 ### Частично совместимо
 
-- Backend поддерживает целевой topic `apiaries/{apiary_id}/devices/{device_id}/telemetry`, но firmware его еще не публикует.
-- Backend умеет создать unassigned device, но для legacy topic без `apiary_id` устройство не попадет в конкретную пасеку без `DEFAULT_APIARY_ID`.
-- Firmware публикует `hives/{deviceId}/events` и `hives/{deviceId}/status`, но backend MVP пока их не обрабатывает.
 - Firmware принимает MQTT-команды, но backend MVP пока не имеет command API/service.
 
 ### Устаревшее в старой документации
@@ -91,23 +91,16 @@ firmware -> hives/{deviceId}/telemetry -> mqtt-ingestion-service -> sensor_readi
 
 ### Firmware
 
-1. Добавить в конфигурацию устройства `apiaryId` или `mqttTopicPrefix`.
-2. Перевести публикацию телеметрии на целевой topic:
-
-```text
-apiaries/{apiary_id}/devices/{device_id}/telemetry
-```
-
-3. Оставить legacy `hives/{deviceId}/telemetry` как compatibility mode на переходный период.
-4. Добавить публикацию результатов команд в целевой topic, когда backend command-service будет реализован.
+1. Поддерживать `apiaryId` как production-настройку устройства.
+2. Оставить legacy `hives/{deviceId}/...` как compatibility mode на переходный период.
+3. После реализации backend command-service проверить полный command loop на apiary-aware topics.
 
 ### Backend
 
-1. Добавить ingestion для `events` и `status`.
-2. Добавить `device_commands` API и MQTT publish в `hives/{deviceId}/commands` для совместимости с текущей firmware.
-3. Добавить scheduler для `missed_telemetry_count`.
-4. Добавить базовые alert/event/tag таблицы.
-5. Добавить production MQTT auth/ACL вместо anonymous Mosquitto.
+1. Добавить `device_commands` API и MQTT publish в firmware command topics.
+2. Добавить scheduler для `missed_telemetry_count`.
+3. Добавить базовые alert/tag таблицы.
+4. Добавить production MQTT auth/ACL вместо anonymous Mosquitto.
 
 ### Документация
 

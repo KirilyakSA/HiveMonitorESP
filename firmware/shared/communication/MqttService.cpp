@@ -83,7 +83,7 @@ bool MqttService::ensureConnected(const AppConfig& config) {
 
     String clientId = config.deviceId + "-" + platformChipId();
     bool ok;
-    if (config.deviceToken.length() > 0) {
+    if (config.mqttUser.length() > 0 || config.mqttPassword.length() > 0 || config.deviceToken.length() > 0) {
         const char* user = config.mqttUser.length() > 0 ? config.mqttUser.c_str() : config.deviceId.c_str();
         const char* pass = config.mqttPassword.length() > 0 ? config.mqttPassword.c_str() : config.deviceToken.c_str();
         ok = mqtt_.connect(clientId.c_str(), user, pass);
@@ -94,14 +94,29 @@ bool MqttService::ensureConnected(const AppConfig& config) {
     if (ok) {
         mqtt_.subscribe(topic(config, "commands").c_str());
         mqtt_.subscribe(topic(config, "config").c_str());
+        if (config.apiaryId.length() > 0) {
+            String legacyCommands = "hives/" + config.deviceId + "/commands";
+            String legacyConfig = "hives/" + config.deviceId + "/config";
+            mqtt_.subscribe(legacyCommands.c_str());
+            mqtt_.subscribe(legacyConfig.c_str());
+        }
     }
     return ok;
 }
 
 String MqttService::topic(const AppConfig& config, const char* suffix) const {
-    String value = "hives/";
-    value += config.deviceId;
-    value += "/";
+    String value;
+    if (config.apiaryId.length() > 0) {
+        value = "apiaries/";
+        value += config.apiaryId;
+        value += "/devices/";
+        value += config.deviceId;
+        value += "/";
+    } else {
+        value = "hives/";
+        value += config.deviceId;
+        value += "/";
+    }
     value += suffix;
     return value;
 }

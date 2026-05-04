@@ -132,9 +132,11 @@ GET  /apiaries/{apiaryID}/hives
 POST /apiaries/{apiaryID}/hives
 GET  /apiaries/{apiaryID}/devices/unassigned
 POST /apiaries/{apiaryID}/devices/{deviceUUID}/assign
+GET  /apiaries/{apiaryID}/events
 
 GET  /hives/{hiveID}/telemetry/latest
 GET  /hives/{hiveID}/telemetry/history
+GET  /hives/{hiveID}/events
 ```
 
 ### 4.2 mqtt-ingestion-service
@@ -151,11 +153,12 @@ backend/cmd/mqtt-ingestion-service/main.go
 - подключиться к PostgreSQL;
 - подключиться к NATS, если доступен;
 - подключиться к MQTT broker;
-- подписаться на telemetry topics;
+- подписаться на telemetry, events и status topics;
 - распарсить MQTT payload;
 - создать или обновить устройство;
 - сохранить raw payload;
 - сохранить sensor readings;
+- сохранить device events и обновить device status metadata;
 - опубликовать событие `telemetry.received` в NATS.
 
 Текущие MQTT topics:
@@ -163,11 +166,15 @@ backend/cmd/mqtt-ingestion-service/main.go
 ```text
 hives/+/telemetry
 apiaries/+/devices/+/telemetry
+hives/+/events
+apiaries/+/devices/+/events
+hives/+/status
+apiaries/+/devices/+/status
 ```
 
-Первый topic нужен для совместимости с текущей firmware.
+Legacy topics `hives/+/...` нужны для совместимости с текущими устройствами.
 
-Второй topic предпочтителен для backend MVP, потому что содержит `apiary_id` и позволяет автоматически положить новое устройство в список непривязанных устройств конкретной пасеки.
+Apiary-aware topics `apiaries/+/devices/+/...` предпочтительны для backend MVP, потому что содержат `apiary_id` и позволяют автоматически положить новое устройство в список непривязанных устройств конкретной пасеки.
 
 ### 4.3 Совместимость с текущей firmware
 
@@ -177,6 +184,9 @@ apiaries/+/devices/+/telemetry
 hives/{deviceId}/telemetry
 hives/{deviceId}/events
 hives/{deviceId}/status
+apiaries/{apiaryId}/devices/{deviceId}/telemetry
+apiaries/{apiaryId}/devices/{deviceId}/events
+apiaries/{apiaryId}/devices/{deviceId}/status
 ```
 
 И подписывается на:
@@ -184,16 +194,18 @@ hives/{deviceId}/status
 ```text
 hives/{deviceId}/commands
 hives/{deviceId}/config
+apiaries/{apiaryId}/devices/{deviceId}/commands
+apiaries/{apiaryId}/devices/{deviceId}/config
 ```
 
-Backend MVP сейчас обрабатывает только telemetry. `events`, `status`, `commands` и `config` являются следующими backend-инкрементами.
+Backend MVP обрабатывает telemetry, device events и device status. `commands` и `config` являются следующими backend-инкрементами.
 
 Для legacy telemetry topic `hives/{deviceId}/telemetry` в topic нет `apiary_id`. Поэтому есть два рабочих сценария:
 
 - задать `DEFAULT_APIARY_ID` для dev/MVP;
 - принимать устройство без пасеки как диагностическое до будущего firmware-инкремента.
 
-Целевой сценарий - firmware публикует `apiaries/{apiary_id}/devices/{device_id}/telemetry`. Для этого в firmware нужно добавить `apiaryId` или настраиваемый topic prefix.
+Целевой сценарий - firmware публикует `apiaries/{apiary_id}/devices/{device_id}/...`. Для этого в firmware используется локальная настройка `apiaryId`.
 
 ## 5. Структура файлов backend
 
@@ -440,6 +452,7 @@ internal/ingestion/service.go
 ```text
 Service
 telemetryPayload
+deviceMessagePayload
 readingPayload
 ```
 
@@ -450,8 +463,11 @@ NewService
 Run
 handleMessage
 parseTelemetry
+parseDeviceEvent
+parseDeviceStatus
 deviceIDFromTopic
 apiaryIDFromTopic
+topicKind
 parseTimestamp
 normalizeMetric
 firstNonEmpty
@@ -460,11 +476,12 @@ firstNonEmpty
 Ответственность:
 
 - MQTT connection lifecycle;
-- подписка на telemetry topics;
+- подписка на telemetry, events и status topics;
 - парсинг payload текущей firmware и нового гибкого формата;
 - нормализация readings;
 - передача готового `IngestTelemetryInput` в repository;
-- публикация `telemetry.received` в NATS.
+- сохранение device events/status;
+- публикация `telemetry.received`, `device.event.received`, `device.status.received` в NATS.
 
 Поддерживаемые форматы telemetry payload:
 
@@ -695,6 +712,7 @@ status
 firmware_version
 config_version
 last_telemetry_at
+last_status_at
 expected_next_telemetry_at
 missed_telemetry_count
 telemetry_interval_minutes
@@ -780,6 +798,26 @@ received_at
 raw_payload_id
 ```
 
+### 7.10 device_events
+
+Журнал событий от устройств, привязанный к пасеке и улью, если устройство уже назначено.
+
+Поля:
+
+```text
+id
+device_id
+apiary_id
+hive_id
+event_type
+message
+ok
+command
+occurred_at
+received_at
+raw_payload_id
+```
+
 `metric_type` является динамическим. Это позволяет поддерживать разные наборы датчиков без миграции схемы под каждый новый sensor.
 
 Примеры `metric_type`:
@@ -831,6 +869,7 @@ raw_payloads
 Device publishes MQTT
   -> Mosquitto receives message
   -> mqtt-ingestion-service receives message
+  -> topicKind routes telemetry/events/status
   -> parseTelemetry extracts:
        device_id
        apiary_id from topic, if present
@@ -843,6 +882,16 @@ Device publishes MQTT
        insert raw_payloads
        insert sensor_readings
   -> Publish NATS event telemetry.received
+
+Device publishes event/status MQTT
+  -> mqtt-ingestion-service receives message
+  -> parseDeviceEvent/parseDeviceStatus extracts device/apiary/timestamp
+  -> Repository.IngestDeviceEvent/IngestDeviceStatus
+       upsert or resolve device
+       find active assignment
+       insert raw_payloads
+       insert device_events or update devices.last_status_at
+  -> Publish NATS event device.event.received/device.status.received
 ```
 
 Если устройство еще не привязано:
@@ -1024,10 +1073,13 @@ POST /organizations/
 POST /apiaries/
 POST /apiaries/{id}/hives
 MQTT publish telemetry
+MQTT publish device event/status
 GET /apiaries/{id}/devices/unassigned
 POST /apiaries/{id}/devices/{deviceUUID}/assign
 GET /hives/{id}/telemetry/latest
 GET /hives/{id}/telemetry/history
+GET /apiaries/{id}/events
+GET /hives/{id}/events
 ```
 
 Фактический результат:
@@ -1041,15 +1093,14 @@ GET /hives/{id}/telemetry/history
 
 Рекомендуемый порядок следующих инкрементов:
 
-1. Добавить `apiaryId` или topic prefix в firmware.
-2. Добавить backend ingestion для `hives/{deviceId}/events` и `hives/{deviceId}/status`.
-3. Добавить API для device commands и MQTT publish в firmware topics.
-4. Добавить refresh tokens и user sessions.
-5. Вынести permission checks в отдельный слой.
-6. Добавить базовые `events`, `hive_tags`, `alerts`.
-7. Сделать alert rule: пропущенные передачи, низкая батарея, резкое изменение веса.
-8. Добавить notification records без реальной доставки.
-9. Добавить tasks/reminders.
-10. Добавить weather provider abstraction.
-11. Добавить OTA модели и endpoints.
-12. Добавить партиционирование telemetry перед production-нагрузкой.
+1. Добавить API для device commands и MQTT publish в firmware topics.
+2. Добавить production provisioning без `DEFAULT_APIARY_ID`.
+3. Добавить refresh tokens и user sessions.
+4. Вынести permission checks в отдельный слой.
+5. Добавить базовые `hive_tags`, `alerts`.
+6. Сделать alert rule: пропущенные передачи, низкая батарея, резкое изменение веса.
+7. Добавить notification records без реальной доставки.
+8. Добавить tasks/reminders.
+9. Добавить weather provider abstraction.
+10. Добавить OTA модели и endpoints.
+11. Добавить партиционирование telemetry перед production-нагрузкой.

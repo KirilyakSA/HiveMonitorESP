@@ -291,7 +291,7 @@ func (r *Repository) ListUnassignedDevices(ctx context.Context, userID, apiaryID
 func (r *Repository) listDevices(ctx context.Context, where string, args ...any) ([]domain.Device, error) {
 	rows, err := r.db.Query(ctx, `
 		select d.id, d.apiary_id, d.device_id, d.device_type, d.status, d.firmware_version,
-			d.config_version, d.last_telemetry_at, d.expected_next_telemetry_at,
+			d.config_version, d.last_telemetry_at, d.last_status_at, d.expected_next_telemetry_at,
 			d.missed_telemetry_count, d.telemetry_interval_minutes, d.created_at
 		from devices d
 		`+where+`
@@ -318,7 +318,7 @@ func scanDevice(row pgx.Row) (*domain.Device, error) {
 	if err := row.Scan(
 		&device.ID, &device.ApiaryID, &device.DeviceID, &device.DeviceType, &device.Status,
 		&device.FirmwareVersion, &device.ConfigVersion, &device.LastTelemetryAt,
-		&device.ExpectedNextTelemetryAt, &device.MissedTelemetryCount,
+		&device.LastStatusAt, &device.ExpectedNextTelemetryAt, &device.MissedTelemetryCount,
 		&device.TelemetryIntervalMinutes, &device.CreatedAt,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -428,6 +428,32 @@ type IngestTelemetryInput struct {
 	Readings                []IngestReading
 }
 
+type IngestDeviceEventInput struct {
+	APIaryID        string
+	DeviceID        string
+	DeviceType      string
+	FirmwareVersion string
+	ConfigVersion   *int
+	EventType       string
+	Message         string
+	OK              *bool
+	Command         string
+	OccurredAt      time.Time
+	RawPayload      json.RawMessage
+	RawTopic        string
+}
+
+type IngestDeviceStatusInput struct {
+	APIaryID        string
+	DeviceID        string
+	DeviceType      string
+	FirmwareVersion string
+	ConfigVersion   *int
+	StatusAt        time.Time
+	RawPayload      json.RawMessage
+	RawTopic        string
+}
+
 func (r *Repository) IngestTelemetry(ctx context.Context, input IngestTelemetryInput) (*domain.Device, error) {
 	tx, err := r.db.Begin(ctx)
 	if err != nil {
@@ -438,6 +464,12 @@ func (r *Repository) IngestTelemetry(ctx context.Context, input IngestTelemetryI
 	var apiaryID *string
 	if input.APIaryID != "" {
 		apiaryID = &input.APIaryID
+	} else {
+		resolvedAPIaryID, err := r.existingDeviceAPIaryID(ctx, tx, input.DeviceID)
+		if err != nil {
+			return nil, err
+		}
+		apiaryID = resolvedAPIaryID
 	}
 	interval := input.TelemetryIntervalMinute
 	if interval <= 0 {
@@ -467,13 +499,13 @@ func (r *Repository) IngestTelemetry(ctx context.Context, input IngestTelemetryI
 			telemetry_interval_minutes = excluded.telemetry_interval_minutes,
 			updated_at = now()
 		returning id, apiary_id, device_id, device_type, status, firmware_version,
-			config_version, last_telemetry_at, expected_next_telemetry_at,
+			config_version, last_telemetry_at, last_status_at, expected_next_telemetry_at,
 			missed_telemetry_count, telemetry_interval_minutes, created_at
 	`, apiaryID, input.DeviceID, deviceType, input.FirmwareVersion, input.ConfigVersion,
 		input.MeasuredAt, expectedNext, interval).Scan(
 		&device.ID, &device.ApiaryID, &device.DeviceID, &device.DeviceType, &device.Status,
 		&device.FirmwareVersion, &device.ConfigVersion, &device.LastTelemetryAt,
-		&device.ExpectedNextTelemetryAt, &device.MissedTelemetryCount,
+		&device.LastStatusAt, &device.ExpectedNextTelemetryAt, &device.MissedTelemetryCount,
 		&device.TelemetryIntervalMinutes, &device.CreatedAt,
 	)
 	if err != nil {
@@ -524,6 +556,205 @@ func (r *Repository) IngestTelemetry(ctx context.Context, input IngestTelemetryI
 	}
 
 	return &device, tx.Commit(ctx)
+}
+
+func (r *Repository) IngestDeviceEvent(ctx context.Context, input IngestDeviceEventInput) (*domain.DeviceEvent, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	device, apiaryID, hiveID, err := r.upsertMessageDevice(ctx, tx, messageDeviceInput{
+		APIaryID:        input.APIaryID,
+		DeviceID:        input.DeviceID,
+		DeviceType:      input.DeviceType,
+		FirmwareVersion: input.FirmwareVersion,
+		ConfigVersion:   input.ConfigVersion,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var rawPayloadID string
+	topic := input.RawTopic
+	if topic == "" {
+		topic = "mqtt.event"
+	}
+	err = tx.QueryRow(ctx, `
+		insert into raw_payloads (device_id, apiary_id, topic, payload, received_at)
+		values ($1, $2, $3, $4::jsonb, now())
+		returning id
+	`, device.ID, apiaryID, topic, string(input.RawPayload)).Scan(&rawPayloadID)
+	if err != nil {
+		return nil, err
+	}
+
+	occurredAt := input.OccurredAt
+	if occurredAt.IsZero() {
+		occurredAt = time.Now().UTC()
+	}
+	eventType := input.EventType
+	if eventType == "" {
+		eventType = "device_event"
+	}
+
+	var event domain.DeviceEvent
+	err = tx.QueryRow(ctx, `
+		insert into device_events (
+			device_id, apiary_id, hive_id, event_type, message, ok, command,
+			occurred_at, raw_payload_id
+		)
+		values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+		returning id, device_id, apiary_id, hive_id, event_type, message, ok, command,
+			occurred_at, received_at, raw_payload_id
+	`, device.ID, apiaryID, hiveID, eventType, input.Message, input.OK, input.Command,
+		occurredAt, rawPayloadID).Scan(
+		&event.ID, &event.DeviceID, &event.ApiaryID, &event.HiveID, &event.EventType,
+		&event.Message, &event.OK, &event.Command, &event.OccurredAt,
+		&event.ReceivedAt, &event.RawPayloadID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &event, tx.Commit(ctx)
+}
+
+func (r *Repository) IngestDeviceStatus(ctx context.Context, input IngestDeviceStatusInput) (*domain.Device, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	device, apiaryID, _, err := r.upsertMessageDevice(ctx, tx, messageDeviceInput{
+		APIaryID:        input.APIaryID,
+		DeviceID:        input.DeviceID,
+		DeviceType:      input.DeviceType,
+		FirmwareVersion: input.FirmwareVersion,
+		ConfigVersion:   input.ConfigVersion,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	topic := input.RawTopic
+	if topic == "" {
+		topic = "mqtt.status"
+	}
+	_, err = tx.Exec(ctx, `
+		insert into raw_payloads (device_id, apiary_id, topic, payload, received_at)
+		values ($1, $2, $3, $4::jsonb, now())
+	`, device.ID, apiaryID, topic, string(input.RawPayload))
+	if err != nil {
+		return nil, err
+	}
+
+	statusAt := input.StatusAt
+	if statusAt.IsZero() {
+		statusAt = time.Now().UTC()
+	}
+	err = tx.QueryRow(ctx, `
+		update devices
+		set last_status_at = $2,
+			firmware_version = coalesce(nullif($3, ''), firmware_version),
+			config_version = coalesce($4, config_version),
+			updated_at = now()
+		where id = $1
+		returning id, apiary_id, device_id, device_type, status, firmware_version,
+			config_version, last_telemetry_at, last_status_at, expected_next_telemetry_at,
+			missed_telemetry_count, telemetry_interval_minutes, created_at
+	`, device.ID, statusAt, input.FirmwareVersion, input.ConfigVersion).Scan(
+		&device.ID, &device.ApiaryID, &device.DeviceID, &device.DeviceType, &device.Status,
+		&device.FirmwareVersion, &device.ConfigVersion, &device.LastTelemetryAt,
+		&device.LastStatusAt, &device.ExpectedNextTelemetryAt, &device.MissedTelemetryCount,
+		&device.TelemetryIntervalMinutes, &device.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return device, tx.Commit(ctx)
+}
+
+type messageDeviceInput struct {
+	APIaryID        string
+	DeviceID        string
+	DeviceType      string
+	FirmwareVersion string
+	ConfigVersion   *int
+}
+
+func (r *Repository) upsertMessageDevice(ctx context.Context, tx pgx.Tx, input messageDeviceInput) (*domain.Device, *string, *string, error) {
+	var apiaryID *string
+	if input.APIaryID != "" {
+		apiaryID = &input.APIaryID
+	} else {
+		resolvedAPIaryID, err := r.existingDeviceAPIaryID(ctx, tx, input.DeviceID)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		apiaryID = resolvedAPIaryID
+	}
+	deviceType := input.DeviceType
+	if deviceType == "" {
+		deviceType = "hive_monitor"
+	}
+
+	var device domain.Device
+	err := tx.QueryRow(ctx, `
+		insert into devices (
+			apiary_id, device_id, device_type, status, firmware_version, config_version
+		)
+		values ($1, $2, $3, 'unassigned', $4, $5)
+		on conflict (device_id) do update set
+			apiary_id = coalesce(devices.apiary_id, excluded.apiary_id),
+			firmware_version = coalesce(nullif(excluded.firmware_version, ''), devices.firmware_version),
+			config_version = coalesce(excluded.config_version, devices.config_version),
+			updated_at = now()
+		returning id, apiary_id, device_id, device_type, status, firmware_version,
+			config_version, last_telemetry_at, last_status_at, expected_next_telemetry_at,
+			missed_telemetry_count, telemetry_interval_minutes, created_at
+	`, apiaryID, input.DeviceID, deviceType, input.FirmwareVersion, input.ConfigVersion).Scan(
+		&device.ID, &device.ApiaryID, &device.DeviceID, &device.DeviceType, &device.Status,
+		&device.FirmwareVersion, &device.ConfigVersion, &device.LastTelemetryAt,
+		&device.LastStatusAt, &device.ExpectedNextTelemetryAt, &device.MissedTelemetryCount,
+		&device.TelemetryIntervalMinutes, &device.CreatedAt,
+	)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	var assignmentHiveID *string
+	var assignmentAPIaryID *string
+	err = tx.QueryRow(ctx, `
+		select apiary_id, hive_id
+		from device_assignments
+		where device_id = $1 and unassigned_at is null
+		order by assigned_at desc
+		limit 1
+	`, device.ID).Scan(&assignmentAPIaryID, &assignmentHiveID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil, nil, err
+	}
+	if assignmentAPIaryID != nil {
+		apiaryID = assignmentAPIaryID
+	}
+	return &device, apiaryID, assignmentHiveID, nil
+}
+
+func (r *Repository) existingDeviceAPIaryID(ctx context.Context, tx pgx.Tx, deviceID string) (*string, error) {
+	var apiaryID *string
+	err := tx.QueryRow(ctx, `select apiary_id from devices where device_id = $1`, deviceID).Scan(&apiaryID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("apiary id is required for unknown legacy device %q", deviceID)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if apiaryID == nil {
+		return nil, fmt.Errorf("apiary id is required for unassigned legacy device %q", deviceID)
+	}
+	return apiaryID, nil
 }
 
 func (r *Repository) LatestTelemetryForHive(ctx context.Context, userID, hiveID string) ([]domain.SensorReading, error) {
@@ -592,6 +823,65 @@ func (r *Repository) TelemetryHistoryForHive(ctx context.Context, userID, hiveID
 	return scanReadings(rows)
 }
 
+func (r *Repository) EventsForApiary(ctx context.Context, userID, apiaryID string, limit int) ([]domain.DeviceEvent, error) {
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotFound
+	}
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	rows, err := r.db.Query(ctx, `
+		select id, device_id, apiary_id, hive_id, event_type, message, ok, command,
+			occurred_at, received_at, raw_payload_id
+		from device_events
+		where apiary_id = $1
+		order by occurred_at desc
+		limit $2
+	`, apiaryID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanDeviceEvents(rows)
+}
+
+func (r *Repository) EventsForHive(ctx context.Context, userID, hiveID string, limit int) ([]domain.DeviceEvent, error) {
+	var apiaryID string
+	if err := r.db.QueryRow(ctx, `select apiary_id from hives where id = $1`, hiveID).Scan(&apiaryID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotFound
+	}
+	if limit <= 0 || limit > 1000 {
+		limit = 200
+	}
+	rows, err := r.db.Query(ctx, `
+		select id, device_id, apiary_id, hive_id, event_type, message, ok, command,
+			occurred_at, received_at, raw_payload_id
+		from device_events
+		where hive_id = $1
+		order by occurred_at desc
+		limit $2
+	`, hiveID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanDeviceEvents(rows)
+}
+
 func scanReadings(rows pgx.Rows) ([]domain.SensorReading, error) {
 	var result []domain.SensorReading
 	for rows.Next() {
@@ -604,6 +894,22 @@ func scanReadings(rows pgx.Rows) ([]domain.SensorReading, error) {
 			return nil, err
 		}
 		result = append(result, reading)
+	}
+	return result, rows.Err()
+}
+
+func scanDeviceEvents(rows pgx.Rows) ([]domain.DeviceEvent, error) {
+	var result []domain.DeviceEvent
+	for rows.Next() {
+		var event domain.DeviceEvent
+		if err := rows.Scan(
+			&event.ID, &event.DeviceID, &event.ApiaryID, &event.HiveID,
+			&event.EventType, &event.Message, &event.OK, &event.Command,
+			&event.OccurredAt, &event.ReceivedAt, &event.RawPayloadID,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, event)
 	}
 	return result, rows.Err()
 }

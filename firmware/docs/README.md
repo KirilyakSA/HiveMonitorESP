@@ -88,6 +88,7 @@ firmware/
 - `firmwareVersion`;
 - `configVersion`;
 - `deviceId`;
+- `apiaryId`, если задан в конфигурации;
 - `timestamp`;
 - `uptimeSeconds`;
 - `measurementIntervalSeconds`;
@@ -121,7 +122,7 @@ firmware/
 
 ## MQTT topics и совместимость с backend
 
-Текущая firmware публикует legacy topics:
+Firmware публикует legacy topics, если `apiaryId` не задан:
 
 ```text
 hives/{deviceId}/telemetry
@@ -129,17 +130,17 @@ hives/{deviceId}/events
 hives/{deviceId}/status
 ```
 
-Текущий backend MVP принимает `hives/+/telemetry`, поэтому телеметрия совместима.
-
-Целевой backend topic для provisioning по пасеке:
+Если в конфигурации задан `apiaryId`, firmware публикует apiary-aware topics:
 
 ```text
-apiaries/{apiary_id}/devices/{device_id}/telemetry
+apiaries/{apiaryId}/devices/{deviceId}/telemetry
+apiaries/{apiaryId}/devices/{deviceId}/events
+apiaries/{apiaryId}/devices/{deviceId}/status
 ```
 
-Firmware пока не публикует этот topic, потому что в конфигурации устройства еще нет `apiaryId` или `mqttTopicPrefix`. До добавления этой настройки backend может использовать `DEFAULT_APIARY_ID` для dev/MVP или принимать legacy telemetry как диагностическую до ручной привязки.
+Текущий backend MVP принимает legacy и apiary-aware topics для telemetry, events и status. Apiary-aware topics являются целевым production-контрактом для автоматического provisioning по пасеке. Legacy topics остаются compatibility mode для уже прошитых устройств и локального MVP/dev сценария.
 
-`mqttUser` и `mqttPassword` в firmware совместимы с последним требованием "общие MQTT credentials на уровне пасеки". Поле `deviceToken` остается legacy/fallback секретом локальной конфигурации, но не является основным backend-MVP способом авторизации устройства.
+`mqttUser` и `mqttPassword` в firmware совместимы с последним требованием "общие MQTT credentials на уровне пасеки" и используются независимо от `deviceToken`. Поле `deviceToken` остается legacy/fallback секретом локальной конфигурации, но не является основным backend-MVP способом авторизации устройства.
 
 ## MQTT-команды
 
@@ -147,6 +148,11 @@ Firmware пока не публикует этот topic, потому что в
 
 - `hives/{deviceId}/commands`;
 - `hives/{deviceId}/config`.
+
+Если задан `apiaryId`, устройство также подписывается на:
+
+- `apiaries/{apiaryId}/devices/{deviceId}/commands`;
+- `apiaries/{apiaryId}/devices/{deviceId}/config`.
 
 Поддерживаемые команды:
 
@@ -170,7 +176,7 @@ Firmware пока не публикует этот topic, потому что в
 
 Конфигурация хранит отдельное поле `schemaVersion` для версии формата настроек. `configVersion` остается счетчиком изменений настроек и увеличивается при сохранении через web или MQTT. Старые конфиги без `schemaVersion` автоматически помечаются текущей схемой, а конфиги с более новой схемой не загружаются старой прошивкой.
 
-Ответ публикуется в `hives/{deviceId}/status`.
+Ответ публикуется в текущий status topic: `hives/{deviceId}/status` в legacy mode или `apiaries/{apiaryId}/devices/{deviceId}/status` при заданном `apiaryId`.
 
 ## Датчик Холла и сон
 
@@ -210,6 +216,7 @@ Firmware пока не публикует этот topic, потому что в
 - настройка Wi-Fi;
 - настройка MQTT;
 - настройка `deviceId`;
+- настройка `apiaryId` для apiary-aware MQTT topics;
 - ввод `deviceToken` как legacy/fallback секрета;
 - выбор модулей;
 - настройка пинов;
