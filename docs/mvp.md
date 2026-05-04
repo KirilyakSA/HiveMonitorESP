@@ -13,6 +13,7 @@
   -> backend принимает данные
   -> устройство привязывается к улью
   -> API возвращает latest/history telemetry
+  -> web показывает рабочую панель пасеки
 ```
 
 ## Реализовано сейчас
@@ -23,8 +24,8 @@
 - Локальный web-интерфейс устройства.
 - Настройка Wi-Fi, MQTT, TLS, пинов, датчиков, периода измерений.
 - HX711, DHT11/DHT21/DHT22, датчик Холла, батарея.
-- JSON-телеметрия в `hives/{deviceId}/telemetry`.
-- События в `hives/{deviceId}/events`.
+- JSON-телеметрия в legacy или apiary-aware MQTT topics.
+- События и статусы в legacy или apiary-aware MQTT topics.
 - MQTT-команды `measure`, `restart`, `tare`, `clearBuffer`, `configUpdate`.
 - Буферизация телеметрии в LittleFS.
 - Локальное web-обновление прошивки.
@@ -56,6 +57,19 @@
 - Журнал device events для пасеки и улья.
 - Latest/history telemetry endpoints.
 
+### Web
+
+- React + TypeScript + Vite SPA.
+- Email/password вход и регистрация.
+- Организации.
+- Пасеки.
+- Ульи.
+- Непривязанные устройства.
+- Привязка устройства к улью.
+- Latest telemetry карточки.
+- History telemetry график за 24 часа.
+- Журналы событий пасеки и улья.
+
 ## Проверенный сценарий
 
 Проверялось:
@@ -78,6 +92,7 @@ GET /hives/{id}/telemetry/latest
 GET /hives/{id}/telemetry/history
 GET /apiaries/{id}/events
 GET /hives/{id}/events
+Web: login/register, create organization/apiary/hive, assign device, view telemetry/events
 ```
 
 Результат: telemetry была принята, устройство создано как `unassigned`, привязано к улью, latest/history вернули readings, event/status messages сохраняются.
@@ -87,6 +102,7 @@ GET /hives/{id}/events
 - Legacy mode `hives/{deviceId}/...` остается только для совместимости и dev/MVP.
 - Для production provisioning нужно задавать `apiaryId` в локальной конфигурации firmware и использовать topics `apiaries/{apiary_id}/devices/{device_id}/...`.
 - Backend пока не отправляет MQTT-команды устройствам, хотя firmware их принимает.
+- Web пока не отправляет команды устройствам, потому что backend command API еще не реализован.
 - Alerts, системные теги, события от alerts и уведомления еще не реализованы.
 - Проверка пропущенных передач еще не реализована.
 - Tasks/reminders еще не реализованы.

@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: hivemonitor
-      POSTGRES_USER: hivemonitor
-      POSTGRES_PASSWORD: hivemonitor
+      POSTGRES_DB: ${POSTGRES_DB:-hivemonitor}
+      POSTGRES_USER: ${POSTGRES_USER:-hivemonitor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hivemonitor}
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hivemonitor -d hivemonitor"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-hivemonitor} -d $${POSTGRES_DB:-hivemonitor}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -39,11 +39,14 @@ services:
       dockerfile: Dockerfile
     command: ["/app/api-service"]
     environment:
-      HTTP_ADDR: ":8080"
-      DATABASE_URL: postgres://hivemonitor:hivemonitor@postgres:5432/hivemonitor?sslmode=disable
-      JWT_SECRET: dev-secret-change-me
-      NATS_URL: nats://nats:4222
-      MQTT_BROKER_URL: tcp://mosquitto:1883
+      HTTP_ADDR: ${HTTP_ADDR:-:8080}
+      DATABASE_URL: ${DATABASE_URL:-postgres://hivemonitor:hivemonitor@postgres:5432/hivemonitor?sslmode=disable}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-1440}
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      MQTT_BROKER_URL: ${MQTT_BROKER_URL:-tcp://mosquitto:1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
     ports:
       - "8080:8080"
     depends_on:
@@ -58,11 +61,15 @@ services:
       dockerfile: Dockerfile
     command: ["/app/mqtt-ingestion-service"]
     environment:
-      DATABASE_URL: postgres://hivemonitor:hivemonitor@postgres:5432/hivemonitor?sslmode=disable
-      NATS_URL: nats://nats:4222
-      MQTT_BROKER_URL: tcp://mosquitto:1883
-      MQTT_TELEMETRY_TOPIC: hives/+/telemetry,apiaries/+/devices/+/telemetry,hives/+/events,apiaries/+/devices/+/events,hives/+/status,apiaries/+/devices/+/status
-      DEFAULT_TELEMETRY_INTERVAL_MINUTES: "30"
+      DATABASE_URL: ${DATABASE_URL:-postgres://hivemonitor:hivemonitor@postgres:5432/hivemonitor?sslmode=disable}
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      MQTT_BROKER_URL: ${MQTT_BROKER_URL:-tcp://mosquitto:1883}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-hivemonitor-mqtt-ingestion}
+      MQTT_TELEMETRY_TOPIC: ${MQTT_TELEMETRY_TOPIC:-hives/+/telemetry,apiaries/+/devices/+/telemetry,hives/+/events,apiaries/+/devices/+/events,hives/+/status,apiaries/+/devices/+/status}
+      DEFAULT_APIARY_ID: ${DEFAULT_APIARY_ID:-}
+      DEFAULT_TELEMETRY_INTERVAL_MINUTES: ${DEFAULT_TELEMETRY_INTERVAL_MINUTES:-30}
     depends_on:
       postgres:
         condition: service_healthy

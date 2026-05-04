@@ -25,7 +25,7 @@ firmware -> hives/{deviceId}/... или apiaries/{apiaryId}/devices/{deviceId}/.
 - Deploy: [#21](https://github.com/KirilyakSA/HiveMonitorESP/issues/21) - закрыть anonymous MQTT в production profile.
 - Deploy: [#22](https://github.com/KirilyakSA/HiveMonitorESP/issues/22) - TLS/reverse proxy план для VPS.
 - Deploy: [#23](https://github.com/KirilyakSA/HiveMonitorESP/issues/23) - backup/restore PostgreSQL.
-- Web: [#24](https://github.com/KirilyakSA/HiveMonitorESP/issues/24) - привязка unassigned device к улью.
+- Web: [#24](https://github.com/KirilyakSA/HiveMonitorESP/issues/24) - привязка unassigned device к улью. Реализовано в web MVP, issue можно закрывать после review.
 - Web: [#25](https://github.com/KirilyakSA/HiveMonitorESP/issues/25) - статус по пропущенным передачам.
 - Mobile: [#26](https://github.com/KirilyakSA/HiveMonitorESP/issues/26) - MVP экраны пасеки и улья.
 
