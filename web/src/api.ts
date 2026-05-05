@@ -133,7 +133,7 @@ export class ApiClient {
   }
 
   organizations(): Promise<Organization[]> {
-    return this.request("/organizations/");
+    return this.request<Organization[] | null>("/organizations/").then(asArray);
   }
 
   createOrganization(name: string): Promise<Organization> {
@@ -142,7 +142,7 @@ export class ApiClient {
 
   apiaries(organizationId?: string): Promise<Apiary[]> {
     const query = organizationId ? `?organization_id=${encodeURIComponent(organizationId)}` : "";
-    return this.request(`/apiaries/${query}`);
+    return this.request<Apiary[] | null>(`/apiaries/${query}`).then(asArray);
   }
 
   createApiary(input: Partial<Apiary> & { organization_id: string; name: string }): Promise<Apiary> {
@@ -150,7 +150,7 @@ export class ApiClient {
   }
 
   hives(apiaryId: string): Promise<Hive[]> {
-    return this.request(`/apiaries/${apiaryId}/hives`);
+    return this.request<Hive[] | null>(`/apiaries/${apiaryId}/hives`).then(asArray);
   }
 
   createHive(apiaryId: string, input: Partial<Hive> & { name: string }): Promise<Hive> {
@@ -158,7 +158,7 @@ export class ApiClient {
   }
 
   unassignedDevices(apiaryId: string): Promise<Device[]> {
-    return this.request(`/apiaries/${apiaryId}/devices/unassigned`);
+    return this.request<Device[] | null>(`/apiaries/${apiaryId}/devices/unassigned`).then(asArray);
   }
 
   assignDevice(apiaryId: string, deviceId: string, hiveId: string, importMode: string) {
@@ -169,7 +169,7 @@ export class ApiClient {
   }
 
   latestTelemetry(hiveId: string): Promise<SensorReading[]> {
-    return this.request(`/hives/${hiveId}/telemetry/latest`);
+    return this.request<SensorReading[] | null>(`/hives/${hiveId}/telemetry/latest`).then(asArray);
   }
 
   telemetryHistory(hiveId: string, metric: string, limit = 200): Promise<SensorReading[]> {
@@ -181,15 +181,15 @@ export class ApiClient {
       metric,
       limit: String(limit)
     });
-    return this.request(`/hives/${hiveId}/telemetry/history?${params.toString()}`);
+    return this.request<SensorReading[] | null>(`/hives/${hiveId}/telemetry/history?${params.toString()}`).then(asArray);
   }
 
   apiaryEvents(apiaryId: string, limit = 100): Promise<DeviceEvent[]> {
-    return this.request(`/apiaries/${apiaryId}/events?limit=${limit}`);
+    return this.request<DeviceEvent[] | null>(`/apiaries/${apiaryId}/events?limit=${limit}`).then(asArray);
   }
 
   hiveEvents(hiveId: string, limit = 100): Promise<DeviceEvent[]> {
-    return this.request(`/hives/${hiveId}/events?limit=${limit}`);
+    return this.request<DeviceEvent[] | null>(`/hives/${hiveId}/events?limit=${limit}`).then(asArray);
   }
 
   private async request<T>(path: string, options: { method?: string; body?: unknown } = {}): Promise<T> {
@@ -205,15 +205,26 @@ export class ApiClient {
 
     if (!response.ok) {
       let message = response.statusText;
+      const responseText = await response.text();
+
       try {
-        const data = await response.json();
-        message = data.error ?? message;
+        const data = JSON.parse(responseText);
+        message = data.error ?? data.message ?? message;
       } catch {
-        message = await response.text();
+        message = responseText || message;
       }
+
       throw new ApiError(response.status, message);
+    }
+
+    if (response.status === 204) {
+      return undefined as T;
     }
 
     return response.json() as Promise<T>;
   }
+}
+
+function asArray<T>(value: T[] | null): T[] {
+  return Array.isArray(value) ? value : [];
 }

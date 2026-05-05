@@ -45,6 +45,23 @@ go run ./cmd/api-service
 go run ./cmd/mqtt-ingestion-service
 ```
 
+## Тестовые данные
+
+Для локальной разработки можно заполнить базу демо-организацией, пасеками, ульями, устройствами, телеметрией и событиями:
+
+```bash
+docker exec -i deploy-postgres-1 psql -U hivemonitor -d hivemonitor < backend/seeds/dev_seed.sql
+```
+
+Тестовый пользователь:
+
+```text
+email: demo@hivemonitor.local
+password: password123
+```
+
+Seed идемпотентный: его можно запускать повторно, он обновляет фиксированный демо-набор данных.
+
 ## Реализованный MVP-срез
 
 - регистрация и вход по email/password;

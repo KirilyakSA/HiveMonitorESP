@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -368,6 +369,12 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
+	if value != nil {
+		rv := reflect.ValueOf(value)
+		if rv.Kind() == reflect.Slice && rv.IsNil() {
+			value = reflect.MakeSlice(rv.Type(), 0, 0).Interface()
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)

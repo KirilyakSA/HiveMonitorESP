@@ -317,6 +317,45 @@ curl -s -X POST http://localhost:8080/auth/login \
 Authorization: Bearer <access_token>
 ```
 
+## Тестовые данные
+
+Для проверки frontend и API можно засеять локальную базу демо-данными:
+
+```bash
+docker exec -i deploy-postgres-1 psql -U hivemonitor -d hivemonitor < backend/seeds/dev_seed.sql
+```
+
+После seed можно войти во frontend:
+
+```text
+http://localhost:5173
+```
+
+Тестовый пользователь:
+
+```text
+email: demo@hivemonitor.local
+password: password123
+```
+
+Seed создает:
+
+- организацию `Демо хозяйство HiveMonitor`;
+- две пасеки;
+- несколько ульев;
+- назначенные устройства;
+- одно непривязанное устройство;
+- телеметрию за последние 24 часа;
+- события пасеки и ульев.
+
+Файл seed:
+
+```text
+backend/seeds/dev_seed.sql
+```
+
+Seed идемпотентный: его можно запускать повторно, он обновляет фиксированный демо-набор.
+
 ## Проверка MQTT ingestion
 
 Посмотреть topics, на которые подписался ingestion:
