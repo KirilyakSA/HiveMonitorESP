@@ -12,22 +12,54 @@ firmware -> hives/{deviceId}/... или apiaries/{apiaryId}/devices/{deviceId}/.
 
 Главное несоответствие по provisioning закрыто на уровне firmware/backend контракта: firmware умеет публиковать apiary-aware topics через настройку `apiaryId`, а backend принимает telemetry/events/status в этом namespace. Legacy topics остаются compatibility mode.
 
-## P0 backlog в GitHub Issues
+## P0 backlog в GitHub Issues / P0 Backlog in GitHub Issues
 
-По итогам ревизии несоответствия вынесены в GitHub Issues с высшим приоритетом:
+RU: По итогам ревизии несоответствия вынесены в GitHub Issues с высшим приоритетом.
 
-- Firmware: [#15](https://github.com/KirilyakSA/HiveMonitorESP/issues/15) - привести MQTT topics к модели пасек. Реализовано в коде, issue можно закрывать после review.
-- Backend: [#16](https://github.com/KirilyakSA/HiveMonitorESP/issues/16) - ingest device events. Реализовано в коде, issue можно закрывать после review.
-- Backend: [#17](https://github.com/KirilyakSA/HiveMonitorESP/issues/17) - ingest device status. Реализовано в коде, issue можно закрывать после review.
-- Backend: [#18](https://github.com/KirilyakSA/HiveMonitorESP/issues/18) - command API для текущей firmware.
-- Backend: [#19](https://github.com/KirilyakSA/HiveMonitorESP/issues/19) - alerts по пропущенным передачам вместо простого offline.
-- Backend: [#20](https://github.com/KirilyakSA/HiveMonitorESP/issues/20) - production provisioning без `DEFAULT_APIARY_ID`. Реализовано в коде, issue можно закрывать после review.
-- Deploy: [#21](https://github.com/KirilyakSA/HiveMonitorESP/issues/21) - закрыть anonymous MQTT в production profile.
-- Deploy: [#22](https://github.com/KirilyakSA/HiveMonitorESP/issues/22) - TLS/reverse proxy план для VPS.
-- Deploy: [#23](https://github.com/KirilyakSA/HiveMonitorESP/issues/23) - backup/restore PostgreSQL.
-- Web: [#24](https://github.com/KirilyakSA/HiveMonitorESP/issues/24) - привязка unassigned device к улью. Реализовано в web MVP, issue можно закрывать после review.
-- Web: [#25](https://github.com/KirilyakSA/HiveMonitorESP/issues/25) - статус по пропущенным передачам.
-- Mobile: [#26](https://github.com/KirilyakSA/HiveMonitorESP/issues/26) - MVP экраны пасеки и улья.
+EN: After the project review, mismatches were moved to GitHub Issues with the highest priority.
+
+- Firmware: [#15](https://github.com/KirilyakSA/HiveMonitorESP/issues/15)
+  - RU: привести MQTT topics к модели пасек. Реализовано и закрыто.
+  - EN: align MQTT topics with the apiary model. Implemented and closed.
+- Backend: [#16](https://github.com/KirilyakSA/HiveMonitorESP/issues/16)
+  - RU: ingest device events. Реализовано и закрыто.
+  - EN: ingest device events. Implemented and closed.
+- Backend: [#17](https://github.com/KirilyakSA/HiveMonitorESP/issues/17)
+  - RU: ingest device status. Реализовано и закрыто.
+  - EN: ingest device status. Implemented and closed.
+- Backend: [#18](https://github.com/KirilyakSA/HiveMonitorESP/issues/18)
+  - RU: command API для текущей firmware.
+  - EN: command API for the current firmware.
+- Backend: [#19](https://github.com/KirilyakSA/HiveMonitorESP/issues/19)
+  - RU: alerts по пропущенным передачам вместо простого offline.
+  - EN: alerts for missed transmissions instead of a simple offline state.
+- Backend: [#20](https://github.com/KirilyakSA/HiveMonitorESP/issues/20)
+  - RU: production provisioning без `DEFAULT_APIARY_ID`. Реализовано и закрыто.
+  - EN: production provisioning without `DEFAULT_APIARY_ID`. Implemented and closed.
+- Deploy: [#21](https://github.com/KirilyakSA/HiveMonitorESP/issues/21)
+  - RU: закрыть anonymous MQTT в production profile.
+  - EN: disable anonymous MQTT in the production profile.
+- Deploy: [#22](https://github.com/KirilyakSA/HiveMonitorESP/issues/22)
+  - RU: TLS/reverse proxy план для VPS.
+  - EN: TLS/reverse proxy plan for VPS.
+- Deploy: [#23](https://github.com/KirilyakSA/HiveMonitorESP/issues/23)
+  - RU: backup/restore PostgreSQL.
+  - EN: PostgreSQL backup/restore.
+- Web: [#24](https://github.com/KirilyakSA/HiveMonitorESP/issues/24)
+  - RU: привязка unassigned device к улью. Реализовано и закрыто.
+  - EN: assign an unassigned device to a hive. Implemented and closed.
+- Web: [#25](https://github.com/KirilyakSA/HiveMonitorESP/issues/25)
+  - RU: статус по пропущенным передачам.
+  - EN: missed-transmission status.
+- Web: [#28](https://github.com/KirilyakSA/HiveMonitorESP/issues/28)
+  - RU: нормальный UX привязки устройства к улью с выбором улья и режима исторических данных.
+  - EN: proper device-to-hive assignment UX with hive selection and historical data mode.
+- Web: [#27](https://github.com/KirilyakSA/HiveMonitorESP/issues/27)
+  - RU: поддержать периоды 1/10/30 дней для истории телеметрии и сравнительного графика. Реализовано и закрыто.
+  - EN: support 1/10/30 day periods for telemetry history and the comparison chart. Implemented and closed.
+- Mobile: [#26](https://github.com/KirilyakSA/HiveMonitorESP/issues/26)
+  - RU: MVP экраны пасеки и улья.
+  - EN: MVP apiary and hive screens.
 
 Существующая firmware-задача [#2](https://github.com/KirilyakSA/HiveMonitorESP/issues/2) дополнена комментарием про apiary-aware command topics.
 

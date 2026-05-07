@@ -8,6 +8,8 @@ Backend принимает телеметрию IoT-устройств, хран
 
 Сводка по соответствию реализации и ТЗ: [../../docs/implementation-status.md](../../docs/implementation-status.md).
 
+Текущая backend-очередь работ / Current backend backlog: [backlog.md](backlog.md).
+
 ## Стек
 
 - Go;
@@ -52,6 +54,9 @@ migrations/
 - Latest/history telemetry endpoints.
 - Apiary/hive event journal endpoints.
 - Публикация NATS event `telemetry.received`.
+- Стартовый адаптируемый календарь пасечных работ.
+- Seed базы советов, задач, медоносов и периодов цветения.
+- API советов dashboard и календарных задач пасеки.
 
 ## MQTT
 
@@ -108,11 +113,28 @@ POST /apiaries/{apiaryID}/hives
 GET  /apiaries/{apiaryID}/devices/unassigned
 POST /apiaries/{apiaryID}/devices/{deviceUUID}/assign
 GET  /apiaries/{apiaryID}/events
+GET  /apiaries/{apiaryID}/advice
+PATCH /apiaries/{apiaryID}/advice/{adviceCode}
+GET  /apiaries/{apiaryID}/calendar/tasks
+POST /apiaries/{apiaryID}/calendar/tasks
+PATCH /apiaries/{apiaryID}/calendar/tasks/{taskID}
 
 GET  /hives/{hiveID}/telemetry/latest
 GET  /hives/{hiveID}/telemetry/history
 GET  /hives/{hiveID}/events
 ```
+
+## Календарь работ и советы
+
+Backend хранит шаблонную базу знаний, а не жесткий календарь:
+
+```text
+calendar_template + apiary_calendar_settings + date_shift_days + trigger_type + user overrides
+```
+
+В MVP есть дефолтный seed `backend/seeds/beekeeping_calendar_seed.sql` для `ua_forest_steppe`. Он добавляет периоды пасечного года, шаблоны советов, шаблоны работ, медоносы и периоды цветения. Для каждой пасеки настройки создаются автоматически при первом запросе советов или задач.
+
+Сервис советов уже возвращает календарные, bloom и базовые telemetry-подсказки. Weather-trigger правила заложены в данных, но полноценный weather provider остается отдельной задачей.
 
 ## Не реализовано, но требуется по ТЗ
 
@@ -122,8 +144,8 @@ GET  /hives/{hiveID}/events
 - Alerts, системные теги и события от alerts.
 - Проверка пропущенных плановых передач.
 - Уведомления push/Telegram/in-app.
-- Tasks, recurring tasks, reminders.
 - Weather providers и метеостанции.
+- Полная recurring task engine с RRULE.
 - Архивация телеметрии.
 - OTA rollout.
 - Tariffs/billing.

@@ -15,7 +15,5 @@
     <rect x="66" y="142" width="36" height="6" rx="3" fill="#7B4F1B"/>
     <rect x="66" y="179" width="36" height="6" rx="3" fill="#7B4F1B"/>
     <rect x="66" y="216" width="36" height="6" rx="3" fill="#7B4F1B"/>
-    <rect x="16" y="236" width="136" height="14" rx="3" fill="#6B4A20"/>
   </g>
-  <path d="M33 292C83 277 121 287 156 302C191 317 238 316 300 286V340H0V304C9 300 20 296 33 292Z" fill="#6EA46A"/>
 </svg>

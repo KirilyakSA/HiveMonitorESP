@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type User struct {
 	ID           string
@@ -102,4 +105,113 @@ type DeviceEvent struct {
 	OccurredAt   time.Time `json:"occurred_at"`
 	ReceivedAt   time.Time `json:"received_at"`
 	RawPayloadID *string   `json:"raw_payload_id,omitempty"`
+}
+
+type CalendarSettings struct {
+	APIaryID                 string    `json:"apiary_id"`
+	TemplateID               string    `json:"template_id"`
+	RegionCode               string    `json:"region_code"`
+	ClimateZone              string    `json:"climate_zone"`
+	DateShiftDays            int       `json:"date_shift_days"`
+	EnableWeatherTips        bool      `json:"enable_weather_tips"`
+	EnableBloomTips          bool      `json:"enable_bloom_tips"`
+	EnableTelemetryTips      bool      `json:"enable_telemetry_tips"`
+	EnableTaskAutogeneration bool      `json:"enable_task_autogeneration"`
+	CreatedAt                time.Time `json:"created_at"`
+	UpdatedAt                time.Time `json:"updated_at"`
+}
+
+type AdviceTemplate struct {
+	ID                string          `json:"id"`
+	TemplateID        string          `json:"template_id"`
+	PeriodCode        string          `json:"period_code"`
+	Code              string          `json:"code"`
+	Title             string          `json:"title"`
+	Body              string          `json:"body"`
+	Category          string          `json:"category"`
+	Severity          string          `json:"severity"`
+	Priority          int             `json:"priority"`
+	StartMonth        *int            `json:"start_month,omitempty"`
+	StartDay          *int            `json:"start_day,omitempty"`
+	EndMonth          *int            `json:"end_month,omitempty"`
+	EndDay            *int            `json:"end_day,omitempty"`
+	TriggerType       string          `json:"trigger_type"`
+	TriggerConfig     json.RawMessage `json:"trigger_config"`
+	ActionLabel       string          `json:"action_label"`
+	ActionType        string          `json:"action_type"`
+	IsUserDismissible bool            `json:"is_user_dismissible"`
+}
+
+type BeekeepingAdvice struct {
+	ID                string  `json:"id"`
+	Code              string  `json:"code"`
+	Title             string  `json:"title"`
+	Body              string  `json:"body"`
+	Category          string  `json:"category"`
+	Severity          string  `json:"severity"`
+	Priority          int     `json:"priority"`
+	Source            string  `json:"source"`
+	RelatedHiveID     *string `json:"related_hive_id,omitempty"`
+	ActionLabel       string  `json:"action_label"`
+	ActionType        string  `json:"action_type"`
+	IsUserDismissible bool    `json:"is_user_dismissible"`
+	State             string  `json:"state,omitempty"`
+}
+
+type TaskTemplate struct {
+	ID                     string          `json:"id"`
+	TemplateID             string          `json:"template_id"`
+	PeriodCode             string          `json:"period_code"`
+	Code                   string          `json:"code"`
+	Title                  string          `json:"title"`
+	Description            string          `json:"description"`
+	Category               string          `json:"category"`
+	DefaultDurationMinutes *int            `json:"default_duration_minutes,omitempty"`
+	Severity               string          `json:"severity"`
+	Priority               int             `json:"priority"`
+	StartMonth             *int            `json:"start_month,omitempty"`
+	StartDay               *int            `json:"start_day,omitempty"`
+	EndMonth               *int            `json:"end_month,omitempty"`
+	EndDay                 *int            `json:"end_day,omitempty"`
+	RecurrenceRule         string          `json:"recurrence_rule"`
+	WeatherConstraints     json.RawMessage `json:"weather_constraints"`
+	TelemetryConstraints   json.RawMessage `json:"telemetry_constraints"`
+}
+
+type ApiaryTask struct {
+	ID               string          `json:"id"`
+	APIaryID         string          `json:"apiary_id"`
+	HiveID           *string         `json:"hive_id,omitempty"`
+	SourceTemplateID *string         `json:"source_template_id,omitempty"`
+	Title            string          `json:"title"`
+	Description      string          `json:"description"`
+	Category         string          `json:"category"`
+	Severity         string          `json:"severity"`
+	Status           string          `json:"status"`
+	DueAt            *time.Time      `json:"due_at,omitempty"`
+	CompletedAt      *time.Time      `json:"completed_at,omitempty"`
+	DismissedAt      *time.Time      `json:"dismissed_at,omitempty"`
+	SnoozedUntil     *time.Time      `json:"snoozed_until,omitempty"`
+	Metadata         json.RawMessage `json:"metadata"`
+	CreatedAt        time.Time       `json:"created_at"`
+	UpdatedAt        time.Time       `json:"updated_at"`
+}
+
+type CreateApiaryTaskInput struct {
+	Title       string     `json:"title"`
+	Description string     `json:"description"`
+	Category    string     `json:"category"`
+	Severity    string     `json:"severity"`
+	DueAt       *time.Time `json:"due_at,omitempty"`
+	HiveID      *string    `json:"hive_id,omitempty"`
+}
+
+type UpdateApiaryTaskInput struct {
+	Status       string     `json:"status"`
+	SnoozedUntil *time.Time `json:"snoozed_until,omitempty"`
+}
+
+type AdviceStateInput struct {
+	Status       string     `json:"status"`
+	SnoozedUntil *time.Time `json:"snoozed_until,omitempty"`
 }

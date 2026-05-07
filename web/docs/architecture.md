@@ -14,7 +14,7 @@ MVP сознательно простой:
 - без внешнего state manager;
 - без UI-kit зависимости;
 - один API client;
-- один основной рабочий экран.
+- рабочие экраны переключаются через локальное состояние sidebar.
 
 Это позволяет быстро проверить backend/firmware вертикаль и не закреплять преждевременную архитектуру до появления ролей, command-service, alerts и tasks.
 
@@ -27,10 +27,13 @@ web/
   vite.config.ts
   index.html
   src/
-    api.ts       typed REST client
-    App.tsx      screens, forms, dashboard state
-    main.tsx     React entrypoint
-    styles.css   application styles
+    api.ts                        typed REST client
+    App.tsx                       dashboard data container and orchestration
+    components/
+      DashboardParts.tsx          current UI components, forms, charts and UI helpers
+      MapProvider.tsx             map provider abstraction, OpenStreetMap/Leaflet MVP implementation
+    main.tsx                      React entrypoint
+    styles.css                    application styles
 ```
 
 ## 3. API layer
@@ -56,6 +59,9 @@ MVP state хранится в `App.tsx`:
 - `devices`;
 - `apiaryEvents`;
 - выбранные `organization/apiary/hive`;
+- активный экран sidebar: `apiaries` или `apiary-dashboard`;
+- выбранная пасека на экране списка пасек;
+- сводки пасек по текущей организации;
 - latest/history/events выбранного улья.
 
 После появления более сложных workflows можно выделить:
@@ -101,6 +107,8 @@ Browser -> HTTPS reverse proxy -> api-service
 Текущие крупные блоки:
 
 - `AuthView`;
+- `ApiariesScreen`;
+- `ApiaryMap`;
 - sidebar organizations/apiaries;
 - apiary summary;
 - hives panel;
@@ -109,7 +117,11 @@ Browser -> HTTPS reverse proxy -> api-service
 - telemetry chart;
 - apiary/hive event journals.
 
-Компоненты пока находятся в `App.tsx`, потому что MVP небольшой. При расширении нужно вынести:
+Крупные компоненты вынесены из `App.tsx` в `src/components/DashboardParts.tsx`. Это промежуточный шаг: `App.tsx` остается контейнером данных, а `DashboardParts.tsx` пока держит UI, формы, графики и форматтеры вместе.
+
+Карты подключены через `src/components/MapProvider.tsx`. MVP provider - OpenStreetMap через Leaflet. Экраны используют provider abstraction, чтобы в будущем можно было заменить OpenStreetMap на другой map provider без переписывания экранов.
+
+Следующий шаг рефакторинга - разнести этот файл по feature-модулям:
 
 ```text
 src/components/

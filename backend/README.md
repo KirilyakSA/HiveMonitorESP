@@ -62,6 +62,14 @@ password: password123
 
 Seed идемпотентный: его можно запускать повторно, он обновляет фиксированный демо-набор данных.
 
+Стартовый календарь пасечных работ, советы и медоносы заполняются отдельным seed:
+
+```bash
+docker exec -i deploy-postgres-1 psql -U hivemonitor -d hivemonitor < backend/seeds/beekeeping_calendar_seed.sql
+```
+
+Он создает дефолтный шаблон `ua_forest_steppe`, периоды пасечного года, шаблоны советов, шаблоны работ, медоносы и периоды цветения. Seed также идемпотентный.
+
 ## Реализованный MVP-срез
 
 - регистрация и вход по email/password;
@@ -78,5 +86,20 @@ Seed идемпотентный: его можно запускать повто
 - динамические sensor readings;
 - журнал device events на уровне пасеки и улья;
 - endpoints последней и исторической телеметрии.
+- адаптируемый календарь пасечных работ;
+- API советов и сезонных рекомендаций;
+- API задач пасеки с выполнением, откладыванием и скрытием.
+
+## API календаря и советов
+
+```http
+GET /apiaries/{apiaryID}/advice?date=2026-05-07
+GET /apiaries/{apiaryID}/calendar/tasks?from=2026-05-01&to=2026-05-31
+POST /apiaries/{apiaryID}/calendar/tasks
+PATCH /apiaries/{apiaryID}/calendar/tasks/{taskID}
+PATCH /apiaries/{apiaryID}/advice/{adviceCode}
+```
+
+Советы формулируются как подсказки: “проверьте”, “запланируйте”, “обратите внимание”. Seed не содержит дозировок препаратов и не дает безусловных ветеринарных инструкций.
 
 Подробная документация: [backend/docs](docs/README.md).

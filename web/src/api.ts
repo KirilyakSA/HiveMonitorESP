@@ -87,6 +87,40 @@ export type DeviceEvent = {
   raw_payload_id?: string;
 };
 
+export type AdviceItem = {
+  id: string;
+  code: string;
+  title: string;
+  body: string;
+  category: string;
+  severity: "info" | "notice" | "warning" | "critical" | string;
+  priority: number;
+  source: string;
+  related_hive_id?: string;
+  action_label: string;
+  action_type: string;
+  is_user_dismissible: boolean;
+  state?: "dismissed" | "snoozed" | string;
+};
+
+export type ApiaryTask = {
+  id: string;
+  apiary_id: string;
+  hive_id?: string;
+  source_template_id?: string;
+  title: string;
+  description: string;
+  category: string;
+  severity: "info" | "notice" | "warning" | "critical" | string;
+  status: "planned" | "due" | "overdue" | "completed" | "dismissed" | "snoozed" | string;
+  due_at?: string;
+  completed_at?: string;
+  dismissed_at?: string;
+  snoozed_until?: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AuthResponse = {
   access_token: string;
   user: User;
@@ -172,20 +206,51 @@ export class ApiClient {
     return this.request<SensorReading[] | null>(`/hives/${hiveId}/telemetry/latest`).then(asArray);
   }
 
-  telemetryHistory(hiveId: string, metric: string, limit = 200): Promise<SensorReading[]> {
-    const to = new Date();
-    const from = new Date(to.getTime() - 24 * 60 * 60 * 1000);
+  telemetryHistory(hiveId: string, metric: string, options: { from?: Date; to?: Date; limit?: number } = {}): Promise<SensorReading[]> {
+    const to = options.to ?? new Date();
+    const from = options.from ?? new Date(to.getTime() - 24 * 60 * 60 * 1000);
     const params = new URLSearchParams({
       from: from.toISOString(),
       to: to.toISOString(),
       metric,
-      limit: String(limit)
+      limit: String(options.limit ?? 200)
     });
     return this.request<SensorReading[] | null>(`/hives/${hiveId}/telemetry/history?${params.toString()}`).then(asArray);
   }
 
   apiaryEvents(apiaryId: string, limit = 100): Promise<DeviceEvent[]> {
     return this.request<DeviceEvent[] | null>(`/apiaries/${apiaryId}/events?limit=${limit}`).then(asArray);
+  }
+
+  apiaryAdvice(apiaryId: string, date = new Date(), includeHidden = false): Promise<AdviceItem[]> {
+    const params = new URLSearchParams({ date: date.toISOString() });
+    if (includeHidden) params.set("include_hidden", "true");
+    return this.request<{ items: AdviceItem[] | null }>(`/apiaries/${apiaryId}/advice?${params.toString()}`)
+      .then((response) => asArray(response.items));
+  }
+
+  updateAdviceState(apiaryId: string, adviceCode: string, status: "dismissed" | "snoozed", snoozedUntil?: Date) {
+    return this.request(`/apiaries/${apiaryId}/advice/${encodeURIComponent(adviceCode)}`, {
+      method: "PATCH",
+      body: { status, snoozed_until: snoozedUntil?.toISOString() }
+    });
+  }
+
+  apiaryTasks(apiaryId: string, from: Date, to: Date): Promise<ApiaryTask[]> {
+    const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+    return this.request<{ items: ApiaryTask[] | null }>(`/apiaries/${apiaryId}/calendar/tasks?${params.toString()}`)
+      .then((response) => asArray(response.items));
+  }
+
+  createApiaryTask(apiaryId: string, input: Partial<ApiaryTask> & { title: string }) {
+    return this.request<ApiaryTask>(`/apiaries/${apiaryId}/calendar/tasks`, { method: "POST", body: input });
+  }
+
+  updateApiaryTask(apiaryId: string, taskId: string, status: ApiaryTask["status"], snoozedUntil?: Date) {
+    return this.request<ApiaryTask>(`/apiaries/${apiaryId}/calendar/tasks/${taskId}`, {
+      method: "PATCH",
+      body: { status, snoozed_until: snoozedUntil?.toISOString() }
+    });
   }
 
   hiveEvents(hiveId: string, limit = 100): Promise<DeviceEvent[]> {

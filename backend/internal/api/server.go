@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/KirilyakSA/HiveMonitorESP/backend/internal/auth"
+	"github.com/KirilyakSA/HiveMonitorESP/backend/internal/beekeeping"
 	"github.com/KirilyakSA/HiveMonitorESP/backend/internal/config"
 	"github.com/KirilyakSA/HiveMonitorESP/backend/internal/domain"
 	"github.com/KirilyakSA/HiveMonitorESP/backend/internal/events"
@@ -21,14 +22,15 @@ import (
 )
 
 type Server struct {
-	cfg    config.Config
-	repo   *repository.Repository
-	bus    *events.Bus
-	logger *slog.Logger
+	cfg      config.Config
+	repo     *repository.Repository
+	bus      *events.Bus
+	logger   *slog.Logger
+	calendar *beekeeping.Service
 }
 
 func NewServer(cfg config.Config, repo *repository.Repository, bus *events.Bus, logger *slog.Logger) *Server {
-	return &Server{cfg: cfg, repo: repo, bus: bus, logger: logger}
+	return &Server{cfg: cfg, repo: repo, bus: bus, logger: logger, calendar: beekeeping.New(repo)}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -64,6 +66,11 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/{apiaryID}/devices/unassigned", s.listUnassignedDevices)
 			r.Post("/{apiaryID}/devices/{deviceUUID}/assign", s.assignDevice)
 			r.Get("/{apiaryID}/events", s.apiaryEvents)
+			r.Get("/{apiaryID}/advice", s.apiaryAdvice)
+			r.Patch("/{apiaryID}/advice/{adviceCode}", s.updateAdviceState)
+			r.Get("/{apiaryID}/calendar/tasks", s.apiaryCalendarTasks)
+			r.Post("/{apiaryID}/calendar/tasks", s.createApiaryTask)
+			r.Patch("/{apiaryID}/calendar/tasks/{taskID}", s.updateApiaryTask)
 		})
 
 		r.Route("/hives", func(r chi.Router) {
@@ -348,6 +355,115 @@ func (s *Server) apiaryEvents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, events)
 }
 
+func (s *Server) apiaryAdvice(w http.ResponseWriter, r *http.Request) {
+	date := time.Now().UTC()
+	if value := r.URL.Query().Get("date"); value != "" {
+		parsed, err := parseDate(value)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "date must be YYYY-MM-DD or RFC3339")
+			return
+		}
+		date = parsed
+	}
+	includeHidden := r.URL.Query().Get("include_hidden") == "true"
+	items, err := s.calendar.ActiveAdvice(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "apiaryID"), date, includeHidden)
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (s *Server) updateAdviceState(w http.ResponseWriter, r *http.Request) {
+	var input domain.AdviceStateInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if err := s.calendar.SetAdviceState(
+		r.Context(),
+		userIDFromContext(r.Context()),
+		chi.URLParam(r, "apiaryID"),
+		chi.URLParam(r, "adviceCode"),
+		input,
+	); err != nil {
+		if strings.Contains(err.Error(), "unsupported") {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		s.handleRepoError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) apiaryCalendarTasks(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().UTC()
+	from := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+	to := from.AddDate(0, 1, 0).Add(-time.Nanosecond)
+	if value := r.URL.Query().Get("from"); value != "" {
+		parsed, err := parseDate(value)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "from must be YYYY-MM-DD or RFC3339")
+			return
+		}
+		from = parsed
+	}
+	if value := r.URL.Query().Get("to"); value != "" {
+		parsed, err := parseDate(value)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "to must be YYYY-MM-DD or RFC3339")
+			return
+		}
+		to = parsed
+	}
+	items, err := s.calendar.CalendarTasks(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "apiaryID"), from, to)
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (s *Server) createApiaryTask(w http.ResponseWriter, r *http.Request) {
+	var input domain.CreateApiaryTaskInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	task, err := s.calendar.CreateTask(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "apiaryID"), input)
+	if err != nil {
+		if strings.Contains(err.Error(), "required") {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		s.handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, task)
+}
+
+func (s *Server) updateApiaryTask(w http.ResponseWriter, r *http.Request) {
+	var input domain.UpdateApiaryTaskInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	task, err := s.calendar.UpdateTask(
+		r.Context(),
+		userIDFromContext(r.Context()),
+		chi.URLParam(r, "apiaryID"),
+		chi.URLParam(r, "taskID"),
+		input,
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "unsupported") {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		s.handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, task)
+}
+
 func (s *Server) hiveEvents(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	events, err := s.repo.EventsForHive(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "hiveID"), limit)
@@ -366,6 +482,13 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
 		return false
 	}
 	return true
+}
+
+func parseDate(value string) (time.Time, error) {
+	if parsed, err := time.Parse("2006-01-02", value); err == nil {
+		return parsed, nil
+	}
+	return time.Parse(time.RFC3339, value)
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {

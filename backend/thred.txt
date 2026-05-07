@@ -1,0 +1,380 @@
+# HiveMonitorESP Thread Transfer Prompt
+
+Скопируй этот prompt в новый чат/задачу, чтобы продолжить работу с текущего состояния проекта.
+
+---
+
+Ты Codex в репозитории `KirilyakSA/HiveMonitorESP`.
+
+Текущая ветка: `master`.
+Последний commit: `bb39c93 Polish web dashboard and add demo seed`.
+Важно: после этого commit есть много незакоммиченных изменений. Не откатывай их.
+
+Текущая рабочая директория в прошлой сессии была:
+
+```text
+/home/sergiy/github/HiveMonitorESP/firmware
+```
+
+Корень проекта:
+
+```text
+/home/sergiy/github/HiveMonitorESP
+```
+
+Пользователь говорит на русском/украинском, пишет с опечатками. Отвечай по-русски, спокойно и практично.
+
+## Общая цель проекта
+
+HiveMonitor - система мониторинга пасек и ульев:
+
+- firmware ESP8266/ESP32 публикует telemetry/events/status через MQTT;
+- backend на Go принимает MQTT, хранит PostgreSQL, отдает REST API;
+- web frontend на React/Vite показывает организации, пасеки, ульи, устройства, телеметрию, события;
+- mobile будет позже;
+- проект должен расти в SaaS с тарифами, ролями, уведомлениями, AI, weather analytics, OTA.
+
+## Текущее состояние backend/firmware/web
+
+Backend:
+
+- Go + chi + pgx + goose.
+- Docker Compose: Postgres, NATS, Mosquitto, api-service, mqtt-ingestion-service.
+- Реализованы auth, organizations, apiaries, hives, unassigned devices, assign device, telemetry latest/history, apiary/hive events.
+- `GET /hives/{hiveID}/telemetry/history` уже принимает `from/to/limit`.
+- mqtt-ingestion принимает telemetry/events/status.
+
+Firmware:
+
+- есть apiary-aware topics:
+  - `apiaries/{apiaryId}/devices/{deviceId}/telemetry`
+  - `apiaries/{apiaryId}/devices/{deviceId}/events`
+  - `apiaries/{apiaryId}/devices/{deviceId}/status`
+- legacy topics `hives/{deviceId}/...` оставлены как compatibility mode.
+
+Web:
+
+- React + TypeScript + Vite.
+- До рефакторинга почти все было в `web/src/App.tsx`.
+- Сейчас `App.tsx` стал контейнером данных/orchestration, большая часть UI вынесена в:
+  - `web/src/components/DashboardParts.tsx`
+  - `web/src/components/MapProvider.tsx`
+- Добавлены static assets в `web/public/images/...`.
+- Старые root-level assets удалены:
+  - `web/public/images/apiary-meadow.svg`
+  - `web/public/images/hive-stack.svg`
+- Добавлен `leaflet` и `@types/leaflet`.
+
+## Важные незакоммиченные изменения
+
+`git status --short` показывал:
+
+```text
+ M backend/docs/README.md
+ M backend/seeds/dev_seed.sql
+ M docs/README.md
+ M docs/implementation-status.md
+ M web/docs/README.md
+ M web/docs/architecture.md
+ M web/docs/technical-spec.md
+ M web/package-lock.json
+ M web/package.json
+ D web/public/images/apiary-meadow.svg
+ D web/public/images/hive-stack.svg
+ M web/src/App.tsx
+ M web/src/api.ts
+ M web/src/styles.css
+?? backend/docs/backlog.md
+?? docs/backlog.md
+?? web/docs/hivemonitor_codex_frontend_design_task.md
+?? web/public/images/backgrounds/
+?? web/public/images/brand/
+?? web/public/images/hives/
+?? web/public/images/placeholders/
+?? web/public/images/weather/
+?? web/src/components/
+```
+
+Не удаляй и не откатывай эти изменения.
+
+## Что уже сделано в текущей незакоммиченной работе
+
+### 1. Frontend visual/assets
+
+Пользователь дал visual reference dashboard и задачу по assets.
+
+Сделано:
+
+- добавлены SVG placeholder/static assets:
+  - `web/public/images/brand/`
+  - `web/public/images/backgrounds/`
+  - `web/public/images/hives/`
+  - `web/public/images/weather/`
+  - `web/public/images/placeholders/`
+- добавлен `BrandLogo`;
+- добавлен helper выбора картинки улья по типу;
+- drawer улья использует assets и fallback SVG;
+- sidebar image использует `/images/backgrounds/apiary-sidebar.svg`.
+
+### 2. Dashboard UI fixes
+
+Сделано:
+
+- предупреждения/события не вылезают за карточки;
+- правая карточка выбранного улья показывается только когда выбран улей;
+- weather/tips опущены в нижний layout рядом со списком ульев/графиком;
+- общий график показывает отдельную линию на каждый улей;
+- hover/click по линии выбирает улей, подсвечивает строку и открывает drawer;
+- tooltip графика показывает сводку улья.
+
+### 3. Вкладки событий
+
+Ранее `Запланированные (3)` и `Просроченные (2)` были муляжами.
+
+Сделано:
+
+- вкладки событий стали кликабельными;
+- счетчики считаются из реальных данных;
+- `task`, `scheduled_task`, `reminder` раскладываются в scheduled/overdue;
+- если backend пока не отдает такие события, показывается `0` и empty state.
+
+### 4. Drawer улья
+
+Ранее `Открыть графики` и `Перейти к улью` были почти декоративными.
+
+Сделано:
+
+- вкладки `Обзор / Графики / История` стали активными;
+- `Открыть графики` переключает drawer на графики и перезагружает историю;
+- `Перейти к улью` возвращает на обзор;
+- `Все аларты` переключает на историю.
+
+### 5. Графики 1/10/30 дней
+
+Проблема: UI переключал `1 день / 10 дней / 30 дней`, но API client грузил только последние 24 часа.
+
+Сделано:
+
+- `web/src/api.ts`: `telemetryHistory()` теперь принимает `{ from, to, limit }`;
+- `App.tsx` рассчитывает диапазоны:
+  - `1d`
+  - `10d`
+  - `30d`
+- общий график перезагружает history при смене периода;
+- drawer улья получил такие же кнопки периода;
+- `backend/seeds/dev_seed.sql` расширен до 30 дней demo telemetry;
+- после reseed в БД для demo hive есть:
+  - 24 точки за 1 день;
+  - 240 за 10 дней;
+  - 720 за 30 дней.
+
+Последняя проверка:
+
+```bash
+cd web
+npm run build
+```
+
+Проходила успешно.
+
+### 6. Backlog bilingual
+
+Пользователь попросил все backlog на русском и английском.
+
+Сделано:
+
+- `docs/backlog.md` bilingual RU/EN;
+- `backend/docs/backlog.md` bilingual RU/EN;
+- backlog section in `docs/implementation-status.md` bilingual RU/EN;
+- GitHub issue titles #2-#28 сделаны bilingual;
+- GitHub issue bodies #2-#28 переписаны в формате:
+
+```md
+## RU
+...
+
+## EN
+...
+```
+
+Закрыты как completed:
+
+- #15 Firmware MQTT topics
+- #16 Backend ingest device events
+- #17 Backend ingest device status
+- #20 Backend production provisioning without DEFAULT_APIARY_ID
+- #24 Web unassigned device assignment MVP
+- #27 Web 1/10/30 day telemetry periods
+
+Открыты:
+
+- #28 Web normal device-to-hive assignment UX
+- #25 Web missed telemetry state
+- #18 Backend command API
+- #19 Backend missed telemetry alerts
+- #21 MQTT production auth/ACL
+- #22 TLS/reverse proxy
+- #23 PostgreSQL backup/restore
+- #26 Mobile MVP screens
+- firmware backlog #2-#14
+
+### 7. Новый экран `Пасеки`
+
+Пользователь и Codex провели Q&A и приняли решения:
+
+- экран `Пасеки` - отдельный пункт навигации;
+- MVP без React Router, переключение view через state sidebar;
+- представитель организации видит только пасеки выбранной организации;
+- по умолчанию ничего не выбрано, пока пользователь не кликнет на пасеку;
+- список пасек показывает:
+  - название;
+  - регион/населенный пункт;
+  - основной статус;
+  - отдельный бейдж `Нужна привязка`, если есть unassigned devices;
+  - количество ульев;
+  - активные ульи;
+  - алерты/события;
+  - `последнее обновление` НЕ показывать;
+- карта должна быть реальная;
+- заложить abstraction `map_provider`;
+- первый provider: OpenStreetMap/Leaflet;
+- правая панель выбранной пасеки показывает только сводку и кнопку `Перейти к пасеке`;
+- в правой панели адрес/регион крупно, координаты мелко вторичной строкой;
+- кнопка `Перейти к пасеке` выбирает пасеку и переключает на текущий dashboard `Обзор пасеки`;
+- на экране есть кнопка `Новая пасека`;
+- она открывает полноценную форму создания пасеки;
+- поля формы:
+  - название;
+  - описание;
+  - страна;
+  - область/регион;
+  - населенный пункт;
+  - адрес;
+  - описание места;
+  - широта;
+  - долгота;
+  - часовой пояс;
+- форма позволяет выбрать точку на карте кликом;
+- клик по карте заполняет latitude/longitude;
+- при клике пробовать reverse geocoding через OpenStreetMap/Nominatim;
+- если reverse geocoding не сработал, оставить адресные поля пустыми для ручного ввода;
+- большая карта и mini-map в форме используют одну provider abstraction.
+
+Реализация уже начата и частично завершена:
+
+- добавлен `web/src/components/MapProvider.tsx`;
+- добавлен `ApiaryMap` на Leaflet/OpenStreetMap;
+- `DashboardParts.tsx`:
+  - добавлен `AppView`;
+  - добавлен `ApiarySummary`;
+  - добавлен sidebar item `Пасеки`;
+  - добавлен `ApiariesScreen`;
+  - добавлены `ApiaryListRow`, `ApiarySelectionPanel`, `CreateApiaryModal`;
+  - добавлен reverse geocoding helper через Nominatim;
+- `App.tsx`:
+  - добавлен `activeView`;
+  - добавлен `selectedApiariesScreenId`;
+  - добавлен `apiarySummaries`;
+  - добавлена загрузка summaries по пасекам организации;
+  - добавлен переход с экрана пасек в dashboard выбранной пасеки;
+- `styles.css`:
+  - добавлены стили экрана пасек;
+  - стили списка пасек;
+  - стили карты;
+  - стили правой панели;
+  - стили modal создания пасеки;
+  - адаптивность;
+- `web/docs/README.md`, `web/docs/architecture.md`, `web/docs/technical-spec.md` обновлены под экран пасек и map provider.
+
+Последняя проверка после этого:
+
+```bash
+cd web
+npm run build
+```
+
+Проходила успешно.
+
+Dev server `http://localhost:5173/` отвечал `200`.
+
+## Важные замечания и риски
+
+1. Изменения пока НЕ закоммичены.
+2. Пользователь часто просит `закомить/запуш/замерж`, но в текущем запросе это не было сделано.
+3. Перед commit обязательно проверить:
+
+```bash
+git status --short
+cd web && npm run build
+git diff --check
+```
+
+4. Если нужно тестировать backend:
+
+```bash
+docker compose -f deploy/docker-compose.yml ps
+curl http://localhost:8080/healthz
+```
+
+5. Если demo graphs пустые, нужно перезалить seed:
+
+```bash
+/bin/bash -lc "docker exec -i deploy-postgres-1 psql -U hivemonitor -d hivemonitor < backend/seeds/dev_seed.sql"
+```
+
+6. Для логина demo user:
+
+```text
+demo@hivemonitor.local
+password123
+```
+
+## С чего продолжать в новой задаче
+
+Рекомендуемый следующий шаг:
+
+1. Открыть `web/src/App.tsx`, `web/src/components/DashboardParts.tsx`, `web/src/components/MapProvider.tsx`, `web/src/styles.css`.
+2. Проверить экран `Пасеки` в браузере:
+   - пункт sidebar `Пасеки`;
+   - список пасек;
+   - карта с маркерами;
+   - выбор пасеки из списка и карты;
+   - правая панель;
+   - кнопка `Перейти к пасеке`;
+   - modal `Новая пасека`;
+   - выбор точки на карте;
+   - reverse geocoding;
+   - создание пасеки через backend.
+3. Исправить визуальные/UX замечания пользователя.
+4. После стабилизации - commit и push всех текущих изменений.
+
+## Prompt для нового чата
+
+Продолжи работу в репозитории `KirilyakSA/HiveMonitorESP`.
+
+Не откатывай незакоммиченные изменения. Нужно продолжить с текущего состояния web frontend после реализации экрана `Пасеки`.
+
+Проверь экран `Пасеки`:
+
+- отдельный пункт sidebar `Пасеки`;
+- список пасек выбранной организации;
+- статусы пасек;
+- бейдж `Нужна привязка`;
+- карта OpenStreetMap/Leaflet;
+- selection из списка и карты;
+- правая панель со сводкой и кнопкой `Перейти к пасеке`;
+- полноценная форма создания пасеки;
+- mini-map в форме;
+- click-to-fill latitude/longitude;
+- reverse geocoding через OpenStreetMap/Nominatim;
+- fallback на ручной ввод адреса.
+
+Если есть ошибки, исправь. После исправлений прогоняй:
+
+```bash
+cd web
+npm run build
+git diff --check
+```
+
+Потом подготовь краткий отчет, какие файлы изменены и что проверено.

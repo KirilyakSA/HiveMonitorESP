@@ -440,9 +440,10 @@ samples as (
     select
         hd.*,
         gs.step,
-        date_trunc('minute', now()) - (gs.step * interval '30 minutes') as measured_at
+        (719 - gs.step) as age_index,
+        date_trunc('minute', now()) - (gs.step * interval '1 hour') as measured_at
     from hive_devices hd
-    cross join generate_series(47, 0, -1) as gs(step)
+    cross join generate_series(719, 0, -1) as gs(step)
 ),
 readings as (
     select
@@ -456,12 +457,12 @@ readings as (
     from samples
     cross join lateral (
         values
-            ('weight', base_weight + ((47 - step) * trend) + sin(step::double precision / 3.0) * 0.45, 'kg'),
-            ('weight_change', trend * 30.0 + sin(step::double precision / 4.0) * 0.2, 'kg'),
+            ('weight', base_weight + (age_index * trend) + sin(step::double precision / 13.0) * 0.45 + sin(age_index::double precision / 73.0) * 0.9, 'kg'),
+            ('weight_change', trend * 24.0 + sin(step::double precision / 8.0) * 0.2, 'kg'),
             ('temperature', base_temp + sin(step::double precision / 5.0) * 0.8, '°C'),
             ('humidity', base_humidity + cos(step::double precision / 6.0) * 3.0, '%'),
-            ('battery_percent', greatest(12.0, base_battery - ((47 - step)::double precision * 0.08)), '%'),
-            ('battery_voltage', 3.55 + (base_battery / 100.0) * 0.65 - ((47 - step)::double precision * 0.001), 'V'),
+            ('battery_percent', greatest(12.0, base_battery - (age_index::double precision * 0.01)), '%'),
+            ('battery_voltage', 3.55 + (base_battery / 100.0) * 0.65 - (age_index::double precision * 0.0002), 'V'),
             ('rssi', -55.0 - abs(sin(step::double precision / 4.0) * 8.0), 'dBm'),
             ('free_heap', 43000.0 - (step % 6) * 280.0, 'bytes'),
             ('hive_opened', case when step in (8, 31) and device_id = '55555555-5555-5555-5555-555555555552'::uuid then 1.0 else 0.0 end, '')

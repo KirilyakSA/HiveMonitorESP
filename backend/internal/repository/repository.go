@@ -882,6 +882,287 @@ func (r *Repository) EventsForHive(ctx context.Context, userID, hiveID string, l
 	return scanDeviceEvents(rows)
 }
 
+func (r *Repository) EnsureCalendarSettingsForApiary(ctx context.Context, userID, apiaryID string) (*domain.CalendarSettings, error) {
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	_, err = r.db.Exec(ctx, `
+		insert into apiary_calendar_settings (apiary_id, template_id, region_code, climate_zone)
+		select $1, id, coalesce(region_code, 'ua_forest_steppe'), coalesce(climate_zone, 'temperate')
+		from beekeeping_calendar_templates
+		where is_default = true and is_active = true
+		order by created_at asc
+		limit 1
+		on conflict (apiary_id) do nothing
+	`, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+
+	row := r.db.QueryRow(ctx, `
+		select apiary_id, template_id, coalesce(region_code, ''), coalesce(climate_zone, ''),
+			date_shift_days, enable_weather_tips, enable_bloom_tips, enable_telemetry_tips,
+			enable_task_autogeneration, created_at, updated_at
+		from apiary_calendar_settings
+		where apiary_id = $1
+	`, apiaryID)
+	return scanCalendarSettings(row)
+}
+
+func scanCalendarSettings(row pgx.Row) (*domain.CalendarSettings, error) {
+	var settings domain.CalendarSettings
+	if err := row.Scan(
+		&settings.APIaryID, &settings.TemplateID, &settings.RegionCode, &settings.ClimateZone,
+		&settings.DateShiftDays, &settings.EnableWeatherTips, &settings.EnableBloomTips,
+		&settings.EnableTelemetryTips, &settings.EnableTaskAutogeneration,
+		&settings.CreatedAt, &settings.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &settings, nil
+}
+
+func (r *Repository) AdviceTemplates(ctx context.Context, templateID string) ([]domain.AdviceTemplate, error) {
+	rows, err := r.db.Query(ctx, `
+		select id, template_id, coalesce(period_code, ''), code, title, body, category,
+			severity, priority, start_month, start_day, end_month, end_day, trigger_type,
+			trigger_config, coalesce(action_label, ''), coalesce(action_type, ''), is_user_dismissible
+		from beekeeping_advice_templates
+		where template_id = $1 and is_active = true
+		order by priority asc, title asc
+	`, templateID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []domain.AdviceTemplate
+	for rows.Next() {
+		var item domain.AdviceTemplate
+		if err := rows.Scan(
+			&item.ID, &item.TemplateID, &item.PeriodCode, &item.Code, &item.Title,
+			&item.Body, &item.Category, &item.Severity, &item.Priority,
+			&item.StartMonth, &item.StartDay, &item.EndMonth, &item.EndDay,
+			&item.TriggerType, &item.TriggerConfig, &item.ActionLabel,
+			&item.ActionType, &item.IsUserDismissible,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	return result, rows.Err()
+}
+
+func (r *Repository) AdviceStates(ctx context.Context, apiaryID string) (map[string]domain.AdviceStateInput, error) {
+	rows, err := r.db.Query(ctx, `
+		select advice_code, status, snoozed_until
+		from apiary_advice_states
+		where apiary_id = $1
+	`, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := map[string]domain.AdviceStateInput{}
+	for rows.Next() {
+		var code string
+		var state domain.AdviceStateInput
+		if err := rows.Scan(&code, &state.Status, &state.SnoozedUntil); err != nil {
+			return nil, err
+		}
+		result[code] = state
+	}
+	return result, rows.Err()
+}
+
+func (r *Repository) SetAdviceState(ctx context.Context, userID, apiaryID, adviceCode string, input domain.AdviceStateInput) error {
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotFound
+	}
+	_, err = r.db.Exec(ctx, `
+		insert into apiary_advice_states (apiary_id, advice_code, status, snoozed_until, updated_at)
+		values ($1, $2, $3, $4, now())
+		on conflict (apiary_id, advice_code) do update set
+			status = excluded.status,
+			snoozed_until = excluded.snoozed_until,
+			updated_at = now()
+	`, apiaryID, adviceCode, input.Status, input.SnoozedUntil)
+	return err
+}
+
+func (r *Repository) TaskTemplates(ctx context.Context, templateID string) ([]domain.TaskTemplate, error) {
+	rows, err := r.db.Query(ctx, `
+		select id, template_id, coalesce(period_code, ''), code, title, description,
+			category, default_duration_minutes, severity, priority, start_month, start_day,
+			end_month, end_day, coalesce(recurrence_rule, ''), weather_constraints,
+			telemetry_constraints
+		from beekeeping_task_templates
+		where template_id = $1 and is_active = true
+		order by priority asc, title asc
+	`, templateID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []domain.TaskTemplate
+	for rows.Next() {
+		var item domain.TaskTemplate
+		if err := rows.Scan(
+			&item.ID, &item.TemplateID, &item.PeriodCode, &item.Code, &item.Title,
+			&item.Description, &item.Category, &item.DefaultDurationMinutes,
+			&item.Severity, &item.Priority, &item.StartMonth, &item.StartDay,
+			&item.EndMonth, &item.EndDay, &item.RecurrenceRule,
+			&item.WeatherConstraints, &item.TelemetryConstraints,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	return result, rows.Err()
+}
+
+func (r *Repository) InsertGeneratedApiaryTask(ctx context.Context, apiaryID string, template domain.TaskTemplate, dueAt time.Time) error {
+	_, err := r.db.Exec(ctx, `
+		insert into apiary_tasks (
+			apiary_id, source_template_id, title, description, category, severity,
+			status, due_at, metadata
+		)
+		values ($1, $2, $3, $4, $5, $6, 'planned', $7, jsonb_build_object('template_code', $8::text))
+		on conflict (apiary_id, source_template_id, due_at) where source_template_id is not null do nothing
+	`, apiaryID, template.ID, template.Title, template.Description, template.Category,
+		template.Severity, dueAt, template.Code)
+	return err
+}
+
+func (r *Repository) UpdateApiaryTaskDueStatuses(ctx context.Context, apiaryID string, now time.Time) error {
+	_, err := r.db.Exec(ctx, `
+		update apiary_tasks
+		set status = case when due_at < $2 then 'overdue' else 'due' end,
+			updated_at = now()
+		where apiary_id = $1
+			and status in ('planned', 'due', 'overdue')
+			and due_at is not null
+			and due_at <= $3
+	`, apiaryID, now.Add(-24*time.Hour), now)
+	return err
+}
+
+func (r *Repository) ListApiaryTasks(ctx context.Context, userID, apiaryID string, from, to time.Time) ([]domain.ApiaryTask, error) {
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	rows, err := r.db.Query(ctx, `
+		select id, apiary_id, hive_id, source_template_id, title, description, category,
+			severity, status, due_at, completed_at, dismissed_at, snoozed_until,
+			metadata, created_at, updated_at
+		from apiary_tasks
+		where apiary_id = $1
+			and (due_at is null or (due_at >= $2 and due_at <= $3))
+			and status <> 'dismissed'
+		order by coalesce(due_at, created_at) asc,
+			case severity
+				when 'critical' then 1
+				when 'warning' then 2
+				when 'notice' then 3
+				else 4
+			end,
+			title asc
+	`, apiaryID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanApiaryTasks(rows)
+}
+
+func (r *Repository) CreateApiaryTask(ctx context.Context, userID, apiaryID string, input domain.CreateApiaryTaskInput) (*domain.ApiaryTask, error) {
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotFound
+	}
+	row := r.db.QueryRow(ctx, `
+		insert into apiary_tasks (apiary_id, hive_id, title, description, category, severity, status, due_at)
+		values ($1, $2, $3, $4, coalesce(nullif($5, ''), 'manual'), coalesce(nullif($6, ''), 'notice'), 'planned', $7)
+		returning id, apiary_id, hive_id, source_template_id, title, description, category,
+			severity, status, due_at, completed_at, dismissed_at, snoozed_until,
+			metadata, created_at, updated_at
+	`, apiaryID, input.HiveID, input.Title, input.Description, input.Category, input.Severity, input.DueAt)
+	return scanApiaryTask(row)
+}
+
+func (r *Repository) UpdateApiaryTaskStatus(ctx context.Context, userID, apiaryID, taskID string, input domain.UpdateApiaryTaskInput) (*domain.ApiaryTask, error) {
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotFound
+	}
+	row := r.db.QueryRow(ctx, `
+		update apiary_tasks
+		set status = $3,
+			completed_at = case when $3 = 'completed' then now() else completed_at end,
+			dismissed_at = case when $3 = 'dismissed' then now() else dismissed_at end,
+			snoozed_until = case when $3 = 'snoozed' then $4 else snoozed_until end,
+			updated_at = now()
+		where id = $2 and apiary_id = $1
+		returning id, apiary_id, hive_id, source_template_id, title, description, category,
+			severity, status, due_at, completed_at, dismissed_at, snoozed_until,
+			metadata, created_at, updated_at
+	`, apiaryID, taskID, input.Status, input.SnoozedUntil)
+	return scanApiaryTask(row)
+}
+
+func scanApiaryTasks(rows pgx.Rows) ([]domain.ApiaryTask, error) {
+	var result []domain.ApiaryTask
+	for rows.Next() {
+		task, err := scanApiaryTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *task)
+	}
+	return result, rows.Err()
+}
+
+func scanApiaryTask(row pgx.Row) (*domain.ApiaryTask, error) {
+	var task domain.ApiaryTask
+	if err := row.Scan(
+		&task.ID, &task.APIaryID, &task.HiveID, &task.SourceTemplateID,
+		&task.Title, &task.Description, &task.Category, &task.Severity,
+		&task.Status, &task.DueAt, &task.CompletedAt, &task.DismissedAt,
+		&task.SnoozedUntil, &task.Metadata, &task.CreatedAt, &task.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &task, nil
+}
+
 func scanReadings(rows pgx.Rows) ([]domain.SensorReading, error) {
 	var result []domain.SensorReading
 	for rows.Next() {
