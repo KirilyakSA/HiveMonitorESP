@@ -63,6 +63,39 @@ EN: This document captures the nearest project backlog. GitHub Issues remain the
 - Reports/Backend/Web: [#33](https://github.com/KirilyakSA/HiveMonitorESP/issues/33)
   - RU: паспорт пасеки/партии меда и QR-код для покупателей: история происхождения, период медосбора, динамика веса, погода, обработки без раскрытия точных координат.
   - EN: apiary/honey batch passport and QR code for buyers: origin story, harvest period, weight dynamics, weather and treatments without exposing exact coordinates.
+- Dashboard/Backend/Web: [#34](https://github.com/KirilyakSA/HiveMonitorESP/issues/34)
+  - RU: карточка “Проблемные ульи сегодня”: агрегировать причины внимания из alerts, задач, советов, телеметрии и событий.
+  - EN: “Problem hives today” card: aggregate attention reasons from alerts, tasks, advice, telemetry and events.
+- Calendar/Backend/Web: [#35](https://github.com/KirilyakSA/HiveMonitorESP/issues/35)
+  - RU: календарь работ по сезонам: сезонные периоды, фильтры, задачи из шаблонов, ручные задачи, связи с советами/осмотрами/событиями.
+  - EN: seasonal work calendar: seasonal periods, filters, template tasks, manual tasks, links with advice/inspections/events.
+- Events/Backend/Web/Mobile: [#36](https://github.com/KirilyakSA/HiveMonitorESP/issues/36)
+  - RU: ручные события, комментарии и фото к событию/осмотру с timeline истории улья.
+  - EN: manual events, comments and photos for events/inspections with hive history timeline.
+- Web/Backend: [#37](https://github.com/KirilyakSA/HiveMonitorESP/issues/37)
+  - RU: схема расположения ульев на пасеке: абстрактные координаты, ряд/колонка/сетка/периметр/freeform и drag-and-drop.
+  - EN: apiary hive layout map: abstract coordinates, row/column/grid/perimeter/freeform and drag-and-drop.
+- Analytics/Backend/Web: [#38](https://github.com/KirilyakSA/HiveMonitorESP/issues/38)
+  - RU: weather analytics: корреляция веса с дождем, ветром, температурой, влажностью и давлением, объяснения отклонений.
+  - EN: weather analytics: correlate weight with rain, wind, temperature, humidity and pressure, explain anomalies.
+- Analytics/Backend/Web: [#39](https://github.com/KirilyakSA/HiveMonitorESP/issues/39)
+  - RU: прогноз медосбора на основе медоносов, цветения, погоды и динамики веса ульев.
+  - EN: honey flow forecast based on honey plants, bloom periods, weather and hive weight dynamics.
+- Recommendations/Backend/Web/Mobile: [#40](https://github.com/KirilyakSA/HiveMonitorESP/issues/40)
+  - RU: антироевые подсказки: риск роения, сигналы из осмотров/веса/сезона и создание связанных задач.
+  - EN: anti-swarming recommendations: swarming risk, signals from inspections/weight/season and linked tasks.
+- Security/Firmware/Backend/Web/Mobile: [#41](https://github.com/KirilyakSA/HiveMonitorESP/issues/41)
+  - RU: защита от кражи и вандализма: MVP на текущих сигналах веса/открытия/RSSI/батареи плюс будущие GPS/наклон/geo-fence и тревоги Telegram.
+  - EN: theft and vandalism protection: MVP using current weight/opening/RSSI/battery signals plus future GPS/tilt/geofence and Telegram alarms.
+- AI/Backend/Web/Mobile: [#42](https://github.com/KirilyakSA/HiveMonitorESP/issues/42)
+  - RU: анализ звука ульев: аудио-признаки, паттерны, аномалии и объяснимые подсказки.
+  - EN: hive audio analysis: audio features, patterns, anomalies and explainable recommendations.
+- AI/Backend/Web/Mobile: [#43](https://github.com/KirilyakSA/HiveMonitorESP/issues/43)
+  - RU: анализ изображений рамок: расплод, корм, запечатка, маточники, видимые проблемы и качество фото.
+  - EN: frame image analysis: brood, feed stores, capping, queen cells, visible issues and photo quality.
+- AI/Backend/Web/Mobile: [#44](https://github.com/KirilyakSA/HiveMonitorESP/issues/44)
+  - RU: AI-помощник пасечника: объясняет данные, отвечает по пасеке/улью, предлагает план работ с guardrails.
+  - EN: beekeeper AI assistant: explains data, answers by apiary/hive, suggests work plans with guardrails.
 - Web:
   - RU: вынести mock weather/tips/scheduled events в отдельный data/module слой.
   - EN: move mock weather, tips and scheduled events into a dedicated data/module layer.
