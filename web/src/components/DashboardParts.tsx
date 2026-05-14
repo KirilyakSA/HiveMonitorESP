@@ -577,7 +577,7 @@ export function DevicesPanel({ devices, hives, busy, onAssign }: {
     <section className="panel-card devices-panel">
       <SectionHeader title="Нераспознанные устройства" />
       <div className="device-list">
-        {devices.slice(0, 3).map((device) => (
+        {devices.map((device) => (
           <div className="device-row" key={device.id}>
             <Radio size={20} />
             <div><strong>{device.device_id}</strong><span>{device.device_type}</span></div>
