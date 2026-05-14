@@ -668,6 +668,20 @@ a {
   box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
 }
 
+.assign-modal {
+  position: relative;
+  z-index: 2001;
+  width: min(620px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  display: grid;
+  gap: 16px;
+  border-radius: 14px;
+  background: #fff;
+  padding: 20px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.22);
+}
+
 .modal-head {
   display: flex;
   align-items: start;
@@ -692,6 +706,118 @@ a {
 .modal-map {
   display: grid;
   gap: 8px;
+}
+
+.assign-device-card,
+.assign-current-device,
+.assign-selected-hive {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid #edf2f7;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.assign-selected-hive {
+  display: block;
+  background: #fffaf0;
+  border-color: #fde68a;
+}
+
+.assign-device-card svg,
+.assign-current-device svg {
+  color: #f5a600;
+}
+
+.assign-device-card strong,
+.assign-current-device strong,
+.assign-selected-hive strong {
+  display: block;
+  color: #1f2937;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.assign-device-card span,
+.assign-current-device span,
+.assign-selected-hive span {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.assign-device-card em {
+  justify-self: end;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #fff8e5;
+  color: #7a5200;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.assign-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.field-label {
+  display: grid;
+  gap: 6px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.assign-history-options {
+  display: grid;
+  gap: 10px;
+  border: 1px solid #edf2f7;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.assign-history-options.warning {
+  border-color: #f3c45b;
+  background: #fffaf0;
+}
+
+.assign-history-options legend {
+  padding: 0 4px;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.assign-history-options label {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  cursor: pointer;
+}
+
+.assign-history-options input {
+  margin-top: 3px;
+}
+
+.assign-history-options strong {
+  display: block;
+  color: #334155;
+  font-size: 13px;
+}
+
+.assign-history-options small {
+  display: block;
+  margin-top: 2px;
+  color: #8492a6;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .panel-card {

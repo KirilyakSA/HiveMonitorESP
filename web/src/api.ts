@@ -43,6 +43,10 @@ export type Hive = {
   status: string;
   notes: string;
   created_at: string;
+  assigned_device_id?: string;
+  assigned_device_public_id?: string;
+  assigned_device_type?: string;
+  assigned_device_count: number;
 };
 
 export type Device = {
@@ -195,10 +199,10 @@ export class ApiClient {
     return this.request<Device[] | null>(`/apiaries/${apiaryId}/devices/unassigned`).then(asArray);
   }
 
-  assignDevice(apiaryId: string, deviceId: string, hiveId: string, importMode: string) {
+  assignDevice(apiaryId: string, deviceId: string, hiveId: string, importMode: string, replaceExisting = false) {
     return this.request(`/apiaries/${apiaryId}/devices/${deviceId}/assign`, {
       method: "POST",
-      body: { hive_id: hiveId, import_mode: importMode }
+      body: { hive_id: hiveId, import_mode: importMode, replace_existing: replaceExisting }
     });
   }
 

@@ -177,6 +177,9 @@ Legacy topics `hives/{deviceId}/...` остаются compatibility mode. Produc
   - привязать к улью;
   - оставить диагностическими;
   - удалить.
+- если к выбранному улью уже привязано устройство, UI должен явно спросить:
+  - добавить новое устройство как дополнительное;
+  - заменить существующую активную привязку.
 
 UI не должен использовать простой `offline` для sleeping devices. Корректная модель связи - `last_telemetry_at`, `expected_next_telemetry_at`, `missed_telemetry_count`.
 

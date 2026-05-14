@@ -52,8 +52,8 @@ EN: After the project review, mismatches were moved to GitHub Issues with the hi
   - RU: статус по пропущенным передачам.
   - EN: missed-transmission status.
 - Web: [#28](https://github.com/KirilyakSA/HiveMonitorESP/issues/28)
-  - RU: нормальный UX привязки устройства к улью с выбором улья и режима исторических данных.
-  - EN: proper device-to-hive assignment UX with hive selection and historical data mode.
+  - RU: нормальный UX привязки устройства к улью с выбором улья, режима исторических данных и поведения при уже привязанном устройстве. Реализовано и закрыто.
+  - EN: proper device-to-hive assignment UX with hive selection, historical data mode and existing-device handling. Implemented and closed.
 - Web: [#27](https://github.com/KirilyakSA/HiveMonitorESP/issues/27)
   - RU: поддержать периоды 1/10/30 дней для истории телеметрии и сравнительного графика. Реализовано и закрыто.
   - EN: support 1/10/30 day periods for telemetry history and the comparison chart. Implemented and closed.

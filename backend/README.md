@@ -86,6 +86,7 @@ docker exec -i deploy-postgres-1 psql -U hivemonitor -d hivemonitor < backend/se
 - ульи;
 - список непривязанных устройств;
 - привязка устройства к улью с режимом импорта старой телеметрии;
+- выбор замены существующей активной привязки улья или добавления устройства как дополнительного;
 - MQTT ingestion для текущего firmware topic `hives/{deviceId}/telemetry`;
 - MQTT ingestion для целевого topic `apiaries/{apiary_id}/devices/{device_id}/telemetry`;
 - MQTT ingestion для device events/status в legacy и apiary-aware topics;

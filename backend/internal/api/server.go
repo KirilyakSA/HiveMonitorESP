@@ -274,8 +274,9 @@ func (s *Server) listUnassignedDevices(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) assignDevice(w http.ResponseWriter, r *http.Request) {
 	var input struct {
-		HiveID     string `json:"hive_id"`
-		ImportMode string `json:"import_mode"`
+		HiveID          string `json:"hive_id"`
+		ImportMode      string `json:"import_mode"`
+		ReplaceExisting bool   `json:"replace_existing"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
@@ -291,6 +292,7 @@ func (s *Server) assignDevice(w http.ResponseWriter, r *http.Request) {
 		chi.URLParam(r, "deviceUUID"),
 		input.HiveID,
 		input.ImportMode,
+		input.ReplaceExisting,
 	)
 	if err != nil {
 		s.handleRepoError(w, err)

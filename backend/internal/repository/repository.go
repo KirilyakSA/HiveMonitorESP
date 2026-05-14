@@ -217,7 +217,8 @@ func (r *Repository) CreateHive(ctx context.Context, userID string, input domain
 		)
 		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,coalesce(nullif($12,''), 'active'),$13)
 		returning id, apiary_id, name, number, type, frame_count, super_count, bee_breed,
-			settled_at, queen_year, queen_breed, queen_status, status, notes, created_at
+			settled_at, queen_year, queen_breed, queen_status, status, notes, created_at,
+			null::uuid, null::text, null::text, 0
 	`, input.ApiaryID, input.Name, input.Number, input.Type, input.FrameCount, input.SuperCount,
 		input.BeeBreed, input.SettledAt, input.QueenYear, input.QueenBreed, input.QueenStatus,
 		input.Status, input.Notes)
@@ -234,11 +235,25 @@ func (r *Repository) ListHives(ctx context.Context, userID, apiaryID string) ([]
 	}
 
 	rows, err := r.db.Query(ctx, `
-		select id, apiary_id, name, number, type, frame_count, super_count, bee_breed,
-			settled_at, queen_year, queen_breed, queen_status, status, notes, created_at
-		from hives
-		where apiary_id = $1
-		order by created_at desc
+		select h.id, h.apiary_id, h.name, h.number, h.type, h.frame_count, h.super_count, h.bee_breed,
+			h.settled_at, h.queen_year, h.queen_breed, h.queen_status, h.status, h.notes, h.created_at,
+			active_assignment.device_id, d.device_id, d.device_type, coalesce(assignment_count.total, 0)
+		from hives h
+		left join lateral (
+			select da.device_id
+			from device_assignments da
+			where da.hive_id = h.id and da.unassigned_at is null
+			order by da.assigned_at desc
+			limit 1
+		) active_assignment on true
+		left join lateral (
+			select count(*)::integer as total
+			from device_assignments da
+			where da.hive_id = h.id and da.unassigned_at is null
+		) assignment_count on true
+		left join devices d on d.id = active_assignment.device_id
+		where h.apiary_id = $1
+		order by h.created_at desc
 	`, apiaryID)
 	if err != nil {
 		return nil, err
@@ -262,7 +277,8 @@ func scanHive(row pgx.Row) (*domain.Hive, error) {
 		&hive.ID, &hive.ApiaryID, &hive.Name, &hive.Number, &hive.Type,
 		&hive.FrameCount, &hive.SuperCount, &hive.BeeBreed, &hive.SettledAt,
 		&hive.QueenYear, &hive.QueenBreed, &hive.QueenStatus, &hive.Status,
-		&hive.Notes, &hive.CreatedAt,
+		&hive.Notes, &hive.CreatedAt, &hive.AssignedDeviceID, &hive.AssignedDevicePublicID,
+		&hive.AssignedDeviceType, &hive.AssignedDeviceCount,
 	); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -329,7 +345,7 @@ func scanDevice(row pgx.Row) (*domain.Device, error) {
 	return &device, nil
 }
 
-func (r *Repository) AssignDeviceToHive(ctx context.Context, userID, apiaryID, deviceUUID, hiveID, importMode string) (*domain.DeviceAssignment, error) {
+func (r *Repository) AssignDeviceToHive(ctx context.Context, userID, apiaryID, deviceUUID, hiveID, importMode string, replaceExisting bool) (*domain.DeviceAssignment, error) {
 	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
 	if err != nil {
 		return nil, err
@@ -358,6 +374,32 @@ func (r *Repository) AssignDeviceToHive(ctx context.Context, userID, apiaryID, d
 	}
 	if !deviceExists {
 		return nil, ErrNotFound
+	}
+
+	if replaceExisting {
+		_, err = tx.Exec(ctx, `
+			with replaced as (
+				update device_assignments
+				set unassigned_at = now()
+				where hive_id = $1
+					and apiary_id = $2
+					and device_id <> $3
+					and unassigned_at is null
+				returning device_id
+			)
+			update devices d
+			set status = 'unassigned'
+			from replaced
+			where d.id = replaced.device_id
+				and not exists (
+					select 1
+					from device_assignments da
+					where da.device_id = d.id and da.unassigned_at is null
+				)
+		`, hiveID, apiaryID, deviceUUID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	_, err = tx.Exec(ctx, `

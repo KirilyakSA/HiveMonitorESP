@@ -50,6 +50,9 @@ migrations/
   - `attach_to_hive`;
   - `delete`;
   - `keep`.
+- Выбор поведения, если в улье уже есть активное устройство:
+  - добавить новое устройство как дополнительное;
+  - заменить существующую активную привязку через `replace_existing`.
 - Прием MQTT telemetry.
 - Прием MQTT device events/status.
 - Сохранение raw MQTT payload.

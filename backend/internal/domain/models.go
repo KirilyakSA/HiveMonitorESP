@@ -36,21 +36,25 @@ type Apiary struct {
 }
 
 type Hive struct {
-	ID          string     `json:"id"`
-	ApiaryID    string     `json:"apiary_id"`
-	Name        string     `json:"name"`
-	Number      string     `json:"number"`
-	Type        string     `json:"type"`
-	FrameCount  *int       `json:"frame_count,omitempty"`
-	SuperCount  *int       `json:"super_count,omitempty"`
-	BeeBreed    string     `json:"bee_breed"`
-	SettledAt   *time.Time `json:"settled_at,omitempty"`
-	QueenYear   *int       `json:"queen_year,omitempty"`
-	QueenBreed  string     `json:"queen_breed"`
-	QueenStatus string     `json:"queen_status"`
-	Status      string     `json:"status"`
-	Notes       string     `json:"notes"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID                     string     `json:"id"`
+	ApiaryID               string     `json:"apiary_id"`
+	Name                   string     `json:"name"`
+	Number                 string     `json:"number"`
+	Type                   string     `json:"type"`
+	FrameCount             *int       `json:"frame_count,omitempty"`
+	SuperCount             *int       `json:"super_count,omitempty"`
+	BeeBreed               string     `json:"bee_breed"`
+	SettledAt              *time.Time `json:"settled_at,omitempty"`
+	QueenYear              *int       `json:"queen_year,omitempty"`
+	QueenBreed             string     `json:"queen_breed"`
+	QueenStatus            string     `json:"queen_status"`
+	Status                 string     `json:"status"`
+	Notes                  string     `json:"notes"`
+	CreatedAt              time.Time  `json:"created_at"`
+	AssignedDeviceID       *string    `json:"assigned_device_id,omitempty"`
+	AssignedDevicePublicID *string    `json:"assigned_device_public_id,omitempty"`
+	AssignedDeviceType     *string    `json:"assigned_device_type,omitempty"`
+	AssignedDeviceCount    int        `json:"assigned_device_count"`
 }
 
 type Device struct {

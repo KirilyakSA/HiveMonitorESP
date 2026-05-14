@@ -356,8 +356,8 @@ export function App() {
                     devices={devices}
                     hives={hives}
                     busy={busy}
-                    onAssign={(deviceId, hiveId, importMode) => run("Устройство привязано", async () => {
-                      await client.assignDevice(selectedApiaryId, deviceId, hiveId, importMode);
+                    onAssign={(deviceId, hiveId, importMode, replaceExisting) => run("Устройство привязано", async () => {
+                      await client.assignDevice(selectedApiaryId, deviceId, hiveId, importMode, replaceExisting);
                       await loadApiaryData(selectedApiaryId);
                       setSelectedHiveId(hiveId);
                     })}

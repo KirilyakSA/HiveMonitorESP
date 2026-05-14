@@ -571,7 +571,7 @@ export function DevicesPanel({ devices, hives, busy, onAssign }: {
   devices: Device[];
   hives: Hive[];
   busy: boolean;
-  onAssign: (deviceId: string, hiveId: string, importMode: string) => void;
+  onAssign: (deviceId: string, hiveId: string, importMode: string, replaceExisting: boolean) => void | Promise<void>;
 }) {
   return (
     <section className="panel-card devices-panel">
@@ -591,11 +591,153 @@ export function DevicesPanel({ devices, hives, busy, onAssign }: {
   );
 }
 
-export function QuickAssign({ device, hives, busy, onAssign }: { device: Device; hives: Hive[]; busy: boolean; onAssign: (deviceId: string, hiveId: string, importMode: string) => void }) {
+export function QuickAssign({ device, hives, busy, onAssign }: {
+  device: Device;
+  hives: Hive[];
+  busy: boolean;
+  onAssign: (deviceId: string, hiveId: string, importMode: string, replaceExisting: boolean) => void | Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+
   return (
-    <button className="small-outline" disabled={busy || hives.length === 0} onClick={() => onAssign(device.id, hives[0].id, "attach_to_hive")}>
-      Привязать
-    </button>
+    <>
+      <button className="small-outline" type="button" disabled={busy || hives.length === 0} onClick={() => setOpen(true)}>
+        Привязать
+      </button>
+      {open ? (
+        <AssignDeviceModal
+          device={device}
+          hives={hives}
+          busy={busy}
+          onClose={() => setOpen(false)}
+          onAssign={async (hiveId, importMode, replaceExisting) => {
+            await onAssign(device.id, hiveId, importMode, replaceExisting);
+            setOpen(false);
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function AssignDeviceModal({
+  device,
+  hives,
+  busy,
+  onClose,
+  onAssign
+}: {
+  device: Device;
+  hives: Hive[];
+  busy: boolean;
+  onClose: () => void;
+  onAssign: (hiveId: string, importMode: string, replaceExisting: boolean) => void | Promise<void>;
+}) {
+  const [hiveId, setHiveId] = useState(hives[0]?.id ?? "");
+  const [importMode, setImportMode] = useState("attach_to_hive");
+  const [assignmentMode, setAssignmentMode] = useState<"add" | "replace">("add");
+  const selectedHive = hives.find((hive) => hive.id === hiveId);
+  const selectedHiveHasDevice = Boolean(selectedHive?.assigned_device_id);
+  const selectedHiveDeviceCount = selectedHive?.assigned_device_count ?? 0;
+  const assignedDeviceLabel = selectedHive?.assigned_device_public_id || selectedHive?.assigned_device_id || "Устройство";
+  const assignedDeviceType = selectedHive?.assigned_device_type || "HiveMonitor device";
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!hiveId) return;
+    void onAssign(hiveId, importMode, selectedHiveHasDevice && assignmentMode === "replace");
+  }
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="assign-device-title">
+      <form className="assign-modal" onSubmit={submit}>
+        <div className="modal-head">
+          <div>
+            <span className="eyebrow">Привязка устройства</span>
+            <h3 id="assign-device-title">Выберите улей для устройства</h3>
+          </div>
+          <button className="icon-button" type="button" onClick={onClose} aria-label="Закрыть"><X size={18} /></button>
+        </div>
+
+        <div className="assign-device-card">
+          <Radio size={22} />
+          <div>
+            <strong>{device.device_id}</strong>
+            <span>{device.device_type || "HiveMonitor device"}</span>
+          </div>
+          <em>{device.status}</em>
+        </div>
+
+        <div className="assign-metrics">
+          <ReadingBox label="Последняя телеметрия" value={formatDeviceDate(device.last_telemetry_at)} />
+          <ReadingBox label="Интервал" value={`${device.telemetry_interval_minutes || 30} мин`} />
+          <ReadingBox label="Пропусков" value={device.missed_telemetry_count ?? 0} />
+        </div>
+
+        <label className="field-label">
+          Улей
+          <select value={hiveId} onChange={(event) => setHiveId(event.target.value)} required>
+            {hives.map((hive) => (
+              <option key={hive.id} value={hive.id}>
+                {hive.number ? `Улей ${hive.number}` : hive.name} · {hive.type || "тип не указан"}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {selectedHive ? (
+          <div className="assign-selected-hive">
+            <strong>{selectedHive.number ? `Улей ${selectedHive.number}` : selectedHive.name}</strong>
+            <span>{selectedHive.type || "Тип не указан"} · статус: {hiveStatusText(selectedHive.status)}</span>
+          </div>
+        ) : null}
+
+        {selectedHiveHasDevice ? (
+          <fieldset className="assign-history-options warning">
+            <legend>В этом улье уже есть устройство</legend>
+            <div className="assign-current-device">
+              <Radio size={18} />
+              <div>
+                <strong>{assignedDeviceLabel}</strong>
+                <span>
+                  {assignedDeviceType}
+                  {selectedHiveDeviceCount > 1 ? ` · всего устройств: ${selectedHiveDeviceCount}` : ""}
+                </span>
+              </div>
+            </div>
+            <label>
+              <input type="radio" name="assignmentMode" value="add" checked={assignmentMode === "add"} onChange={() => setAssignmentMode("add")} />
+              <span><strong>Добавить как дополнительное устройство</strong><small>Оставит текущую привязку и добавит новое устройство к этому улью.</small></span>
+            </label>
+            <label>
+              <input type="radio" name="assignmentMode" value="replace" checked={assignmentMode === "replace"} onChange={() => setAssignmentMode("replace")} />
+              <span><strong>Заменить текущее устройство</strong><small>Старое устройство будет отвязано от улья, новое станет активным мониторингом.</small></span>
+            </label>
+          </fieldset>
+        ) : null}
+
+        <fieldset className="assign-history-options">
+          <legend>Что сделать со старой непривязанной телеметрией</legend>
+          <label>
+            <input type="radio" name="importMode" value="attach_to_hive" checked={importMode === "attach_to_hive"} onChange={(event) => setImportMode(event.target.value)} />
+            <span><strong>Привязать к выбранному улью</strong><small>История устройства станет частью графиков и журнала улья.</small></span>
+          </label>
+          <label>
+            <input type="radio" name="importMode" value="keep" checked={importMode === "keep"} onChange={(event) => setImportMode(event.target.value)} />
+            <span><strong>Оставить непривязанной</strong><small>Новые данные пойдут в улей, старая история останется отдельно.</small></span>
+          </label>
+          <label>
+            <input type="radio" name="importMode" value="delete" checked={importMode === "delete"} onChange={(event) => setImportMode(event.target.value)} />
+            <span><strong>Удалить старые данные</strong><small>Подходит, если устройство тестировалось или стояло на другом улье.</small></span>
+          </label>
+        </fieldset>
+
+        <div className="form-actions">
+          <button type="submit" disabled={busy || !hiveId}>Привязать устройство</button>
+          <button type="button" className="ghost" onClick={onClose}>Отмена</button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -1380,6 +1522,18 @@ export function formatSigned(value: number, unit: string) {
 export function formatDate(value?: string) {
   if (!value) return "";
   return new Intl.DateTimeFormat("ru", { hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function formatDeviceDate(value?: string) {
+  if (!value) return "нет данных";
+  return new Intl.DateTimeFormat("ru", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function hiveStatusText(status?: string) {
+  if (status === "attention") return "Внимание";
+  if (status === "offline") return "Нет связи";
+  if (status === "inactive") return "Неактивен";
+  return "Активен";
 }
 
 export function isToday(value?: string) {
