@@ -1186,6 +1186,20 @@ a {
   font-size: 12px;
 }
 
+.status-pill.no-device {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.status-pill.no-data {
+  background: #fff8e5;
+  color: #7a5200;
+}
+
+.device-signal.muted {
+  color: #94a3b8;
+}
+
 .status-pill.attention {
   background: #fff5df;
   color: #b45309;

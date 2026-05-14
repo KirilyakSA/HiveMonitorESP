@@ -215,7 +215,7 @@ func (r *Repository) CreateHive(ctx context.Context, userID string, input domain
 			apiary_id, name, number, type, frame_count, super_count, bee_breed,
 			settled_at, queen_year, queen_breed, queen_status, status, notes
 		)
-		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,coalesce(nullif($12,''), 'active'),$13)
+		values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,coalesce(nullif($12,''), 'no_device'),$13)
 		returning id, apiary_id, name, number, type, frame_count, super_count, bee_breed,
 			settled_at, queen_year, queen_breed, queen_status, status, notes, created_at,
 			null::uuid, null::text, null::text, 0

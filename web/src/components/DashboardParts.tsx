@@ -471,7 +471,7 @@ function CreateApiaryModal({ busy, onClose, onSubmit }: { busy: boolean; onClose
 }
 
 export function SummaryPanel({ hives, devices, events, snapshots }: { hives: Hive[]; devices: Device[]; events: DeviceEvent[]; snapshots: HiveSnapshot }) {
-  const active = hives.filter((hive) => hive.status !== "inactive").length;
+  const active = hives.filter((hive) => effectiveHiveStatus(hive, snapshots[hive.id] ?? []) === "active").length;
   const alarms = events.filter((event) => event.ok === false || event.event_type === "alert").length;
   const averageWeightDelta = average(hives.map((hive) => readingValue(snapshots[hive.id], "weight_change")).filter(isNumber));
   const todayEvents = events.filter((event) => isToday(event.occurred_at)).length;
@@ -633,7 +633,7 @@ function AssignDeviceModal({
   onClose: () => void;
   onAssign: (hiveId: string, importMode: string, replaceExisting: boolean) => void | Promise<void>;
 }) {
-  const [hiveId, setHiveId] = useState(hives[0]?.id ?? "");
+  const [hiveId, setHiveId] = useState("");
   const [importMode, setImportMode] = useState("attach_to_hive");
   const [assignmentMode, setAssignmentMode] = useState<"add" | "replace">("add");
   const selectedHive = hives.find((hive) => hive.id === hiveId);
@@ -676,10 +676,14 @@ function AssignDeviceModal({
 
         <label className="field-label">
           Улей
-          <select value={hiveId} onChange={(event) => setHiveId(event.target.value)} required>
+          <select value={hiveId} onChange={(event) => {
+            setHiveId(event.target.value);
+            setAssignmentMode("add");
+          }} required>
+            <option value="" disabled>Выберите улей</option>
             {hives.map((hive) => (
               <option key={hive.id} value={hive.id}>
-                {hive.number ? `Улей ${hive.number}` : hive.name} · {hive.type || "тип не указан"}
+                {hive.number ? `Улей ${hive.number}` : hive.name} · {hive.type || "тип не указан"} · {deviceName(hive, [])}
               </option>
             ))}
           </select>
@@ -760,7 +764,7 @@ export function HivesTable({
     <section className="panel-card hives-panel">
       <div className="table-toolbar">
         <SectionHeader title={`Ульи (${hives.length})`} />
-        <div className="table-actions"><HiveTabs hives={hives} /><CreateHiveForm disabled={busy} onSubmit={onCreateHive} /><button className="small-outline"><Filter size={15} />Фильтры</button></div>
+        <div className="table-actions"><HiveTabs hives={hives} snapshots={snapshots} /><CreateHiveForm disabled={busy} onSubmit={onCreateHive} /><button className="small-outline"><Filter size={15} />Фильтры</button></div>
       </div>
       <div className="hive-table">
         <div className="hive-table-head">
@@ -776,12 +780,12 @@ export function HivesTable({
             <button key={hive.id} className={`hive-table-row ${hive.id === selectedHiveId ? "selected" : ""}`} onClick={() => onSelectHive(hive.id)}>
               <span><ChevronDown size={14} /><b>{hive.number || shortId(hive.id)}</b></span>
               <span>{hive.type || "Дадан"}{hive.super_count ? " с магазином" : ""}</span>
-              <StatusPill status={hive.status} />
+              <StatusPill status={effectiveHiveStatus(hive, readings)} />
               <WeightDelta reading={delta} />
               <span>{weight ? valueOnly(weight) : "-"}</span>
               <span>{temp ? formatValue(temp) : "-"}</span>
               <span>{hive.status === "attention" ? <span className="alarm-pill">Слабый прирост</span> : "-"}</span>
-              <span className="device-signal"><Radio size={14} />{deviceName(readings)}</span>
+              <span className={`device-signal ${hive.assigned_device_id ? "" : "muted"}`}><Radio size={14} />{deviceName(hive, readings)}</span>
               <span>{formatDate(weight?.measured_at)}</span>
             </button>
           );
@@ -793,8 +797,8 @@ export function HivesTable({
   );
 }
 
-export function HiveTabs({ hives }: { hives: Hive[] }) {
-  const active = hives.filter((hive) => hive.status !== "inactive").length;
+export function HiveTabs({ hives, snapshots }: { hives: Hive[]; snapshots: HiveSnapshot }) {
+  const active = hives.filter((hive) => effectiveHiveStatus(hive, snapshots[hive.id] ?? []) === "active").length;
   const attention = hives.filter((hive) => hive.status === "attention").length;
   return <div className="hive-tabs"><span>Все ({hives.length})</span><span>Активные ({active})</span><span>С алармами ({attention})</span></div>;
 }
@@ -811,6 +815,7 @@ export function CreateHiveForm({ disabled, onSubmit }: { disabled: boolean; onSu
         name: form.name.trim(),
         number: form.number,
         type: form.type,
+        status: "no_device",
         frame_count: optionalInt(form.frame_count),
         super_count: optionalInt(form.super_count)
       });
@@ -885,7 +890,7 @@ export function HiveDetail({ hive, state, latestByMetric, onLoadHistory, onClose
   return (
     <aside className="hive-detail">
       <div className="detail-head">
-        <div><span className="back-arrow">←</span><h2>{hive.name}</h2><StatusPill status={hive.status} /></div>
+        <div><span className="back-arrow">←</span><h2>{hive.name}</h2><StatusPill status={effectiveHiveStatus(hive, state.latest)} /></div>
         <button className="icon-button" onClick={onClose} aria-label="Закрыть карточку улья"><span>×</span></button>
       </div>
       <div className="detail-tabs" role="tablist" aria-label="Карточка улья">
@@ -901,7 +906,7 @@ export function HiveDetail({ hive, state, latestByMetric, onLoadHistory, onClose
             <HiveImage hive={hive} />
             <div>
               <span>Тип улья</span><strong>{hive.type || "Дадан"}{hive.super_count ? " с магазином" : ""}</strong>
-              <span>Устройство</span><strong>{deviceName(state.latest)}</strong>
+              <span>Устройство</span><strong>{deviceName(hive, state.latest)}</strong>
               <span>Установлен</span><strong>{formatDate(hive.created_at)}</strong>
               <span>Местоположение</span><strong>Участок {hive.number || "1"}</strong>
             </div>
@@ -1282,6 +1287,8 @@ export function SeverityIcon({ severity }: { severity: string }) {
 }
 
 export function StatusPill({ status }: { status: string }) {
+  if (status === "no_device") return <span className="status-pill no-device">Нет устройства</span>;
+  if (status === "no_data") return <span className="status-pill no-data">Нет данных</span>;
   const offline = status === "offline" || status === "no_connection";
   const attention = status === "attention";
   return <span className={`status-pill ${offline ? "offline" : attention ? "attention" : ""}`}>{offline ? "Нет связи" : attention ? "Внимание" : "Активен"}</span>;
@@ -1551,9 +1558,19 @@ export function initials(value: string) {
   return value.split(/[ @._-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "П";
 }
 
-export function deviceName(readings: SensorReading[]) {
+function deviceName(hive: Hive, readings: SensorReading[]) {
+  if (hive.assigned_device_public_id) return hive.assigned_device_public_id;
+  if (hive.assigned_device_id) return `HM-${shortId(hive.assigned_device_id).toUpperCase()}`;
   const id = readings[0]?.device_id;
-  return id ? `HM-${shortId(id).toUpperCase()}` : "HM-ESP32";
+  return id ? `HM-${shortId(id).toUpperCase()}` : "Нет устройства";
+}
+
+function effectiveHiveStatus(hive: Hive, readings: SensorReading[]) {
+  if (hive.status === "attention") return "attention";
+  if (!hive.assigned_device_id) return "no_device";
+  if (readings.length === 0) return "no_data";
+  if (hive.status === "offline" || hive.status === "no_connection") return hive.status;
+  return "active";
 }
 
 export function getHiveImageByType(type?: string | null): string {
