@@ -87,6 +87,9 @@ EN: This document captures the nearest project backlog. GitHub Issues remain the
 - Security/Firmware/Backend/Web/Mobile: [#41](https://github.com/KirilyakSA/HiveMonitorESP/issues/41)
   - RU: защита от кражи и вандализма: MVP на текущих сигналах веса/открытия/RSSI/батареи плюс будущие GPS/наклон/geo-fence и тревоги Telegram.
   - EN: theft and vandalism protection: MVP using current weight/opening/RSSI/battery signals plus future GPS/tilt/geofence and Telegram alarms.
+- Firmware/Backend/Web: [#45](https://github.com/KirilyakSA/HiveMonitorESP/issues/45)
+  - RU: workflow калибровки весов и тарирования улья/магазина: локально и через backend, сохранение базового веса пустого улья, веса семьи с рамками, пустого магазина и истории операций.
+  - EN: scale calibration and hive/super tare workflow: local and backend-driven, store empty-hive baseline, colony-with-frames weight, empty-super baseline and operation history.
 - AI/Backend/Web/Mobile: [#42](https://github.com/KirilyakSA/HiveMonitorESP/issues/42)
   - RU: анализ звука ульев: аудио-признаки, паттерны, аномалии и объяснимые подсказки.
   - EN: hive audio analysis: audio features, patterns, anomalies and explainable recommendations.

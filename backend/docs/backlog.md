@@ -153,7 +153,32 @@ EN: Goal - weather context for hive analysis, where weather is not a decorative 
 - RU: поддержку аналитики по слоям: вес улья, температура улья, внешняя температура, дождь, ветер, влажность, давление.
   EN: layered analytics support: hive weight, hive temperature, outside temperature, rain, wind, humidity and pressure.
 
-### 8. Roles and permissions / Роли и права доступа
+### 8. Scale calibration and hive/super tare workflow / Калибровка весов и тарирование улья/магазина - [#45](https://github.com/KirilyakSA/HiveMonitorESP/issues/45)
+
+RU: Цель - сделать весовые данные интерпретируемыми: отделить калибровку датчика от тарирования пустого улья, семьи с рамками и магазинов.
+
+EN: Goal - make weight data interpretable by separating sensor calibration from tare operations for the empty hive, colony with frames and honey supers.
+
+Нужно сделать / Required work:
+
+- RU: модели/таблицы для истории калибровок, истории тарирования и активного `scale_profile` улья/устройства.
+  EN: models/tables for calibration history, tare history and active hive/device `scale_profile`.
+- RU: backend command/API для `calibrate_scale`, `tare_empty_hive`, `tare_super`.
+  EN: backend command/API for `calibrate_scale`, `tare_empty_hive`, `tare_super`.
+- RU: после калибровки поддержать тарирование пустого улья без рамок, но с крышкой; сохранить этот вес как нулевое/стартовое значение улья.
+  EN: after calibration, support taring an empty hive without frames but with cover; store this as the hive zero/baseline value.
+- RU: при установке магазина поддержать второе тарирование: улей с семьей и рамками + пустой магазин без рамок; сохранить вес семьи с рамками и базовый вес пустого магазина.
+  EN: when adding a super, support a second tare: hive with colony and frames + empty super without frames; store colony-with-frames weight and empty-super baseline.
+- RU: хранить пользователя, источник операции (`local_device`, `backend_command`), время, результат, параметры и комментарий.
+  EN: store user, operation source (`local_device`, `backend_command`), time, result, parameters and comment.
+- RU: связать результат firmware ack/status с command journal.
+  EN: link firmware ack/status result with the command journal.
+- RU: web/mobile UI для мастера калибровки/тарирования и просмотра истории.
+  EN: web/mobile UI for calibration/tare wizard and history view.
+- RU: использовать активный профиль веса в аналитике: общий вес, прирост меда, вес семьи, вклад магазинов.
+  EN: use active weight profile in analytics: gross weight, honey gain, colony weight and super contribution.
+
+### 9. Roles and permissions / Роли и права доступа
 
 RU: Цель - подготовить SaaS-модель с организациями, пасеками и командами.
 
@@ -172,7 +197,7 @@ EN: Goal - prepare a SaaS model with organizations, apiaries and teams.
 - RU: тесты на доступ к apiary/hive/device/event ресурсам.
   EN: access tests for apiary/hive/device/event resources.
 
-### 9. Карта радиуса лёта и медоносов / Foraging Radius and Honey Plant Map - [#31](https://github.com/KirilyakSA/HiveMonitorESP/issues/31)
+### 10. Карта радиуса лёта и медоносов / Foraging Radius and Honey Plant Map - [#31](https://github.com/KirilyakSA/HiveMonitorESP/issues/31)
 
 RU: Цель - добавить geo-слой пасеки: радиус лёта, медоносы, поля, сады, лесополосы, риски обработок и прогноз медосбора.
 
@@ -195,7 +220,7 @@ EN: Goal - add an apiary geo layer: foraging radius, honey plants, fields, orcha
 - RU: основу прогноза медосбора по медоносам, погоде и динамике веса.
   EN: foundation for honey flow forecast based on honey plants, weather and weight dynamics.
 
-### 10. Режим кочевой пасеки / Migratory Apiary Mode - [#32](https://github.com/KirilyakSA/HiveMonitorESP/issues/32)
+### 11. Режим кочевой пасеки / Migratory Apiary Mode - [#32](https://github.com/KirilyakSA/HiveMonitorESP/issues/32)
 
 RU: Цель - поддержать профессиональных пасечников, которые перевозят партии ульев между стоянками под конкретные медоносы и культуры.
 
@@ -216,7 +241,7 @@ EN: Goal - support professional beekeepers who move hive batches between stands 
 - RU: отчет по результату медосбора: период, динамика веса, погода, фактический результат.
   EN: honey flow result report: period, weight dynamics, weather and actual result.
 
-### 11. Паспорт пасеки/партии меда и QR / Apiary or Honey Batch Passport and QR - [#33](https://github.com/KirilyakSA/HiveMonitorESP/issues/33)
+### 12. Паспорт пасеки/партии меда и QR / Apiary or Honey Batch Passport and QR - [#33](https://github.com/KirilyakSA/HiveMonitorESP/issues/33)
 
 RU: Цель - отчеты для продажи меда и доверия покупателей: публичная история партии меда без раскрытия точных координат и приватных данных.
 
@@ -239,7 +264,7 @@ EN: Goal - honey sales and buyer trust reports: a public honey batch story witho
 - RU: будущий PDF/HTML export.
   EN: future PDF/HTML export.
 
-### 12. Карточка проблемных ульев сегодня / Problem Hives Today Card - [#34](https://github.com/KirilyakSA/HiveMonitorESP/issues/34)
+### 13. Карточка проблемных ульев сегодня / Problem Hives Today Card - [#34](https://github.com/KirilyakSA/HiveMonitorESP/issues/34)
 
 RU: Цель - дать пасечнику быстрый ежедневный список ульев, которые сегодня требуют внимания, с понятной причиной.
 
@@ -256,7 +281,7 @@ EN: Goal - give the beekeeper a fast daily list of hives requiring attention tod
 - RU: поддержать действие “скрыть на сегодня”.
   EN: support “hide for today”.
 
-### 13. Календарь работ по сезонам / Seasonal Work Calendar - [#35](https://github.com/KirilyakSA/HiveMonitorESP/issues/35)
+### 14. Календарь работ по сезонам / Seasonal Work Calendar - [#35](https://github.com/KirilyakSA/HiveMonitorESP/issues/35)
 
 RU: Цель - развить текущий календарь работ в полноценную сезонную картину пасеки: текущие, будущие и просроченные работы по периодам пасечного года.
 
@@ -277,7 +302,7 @@ EN: Goal - evolve the current work calendar into a full seasonal apiary view: cu
 - RU: выполнение, откладывание, скрытие, комментарий и результат работы.
   EN: complete, snooze, dismiss, comment and work result.
 
-### 14. Ручные события, комментарии и фото / Manual Events, Comments and Photos - [#36](https://github.com/KirilyakSA/HiveMonitorESP/issues/36)
+### 15. Ручные события, комментарии и фото / Manual Events, Comments and Photos - [#36](https://github.com/KirilyakSA/HiveMonitorESP/issues/36)
 
 RU: Цель - дать пасечнику возможность вручную фиксировать наблюдения, комментарии, результаты работ и фото в истории пасеки/улья.
 
@@ -298,7 +323,7 @@ EN: Goal - allow beekeepers to manually record observations, comments, work resu
 - RU: file storage abstraction, permissions и audit автора.
   EN: file storage abstraction, permissions and author audit.
 
-### 15. Схема расположения ульев / Apiary Hive Layout Map - [#37](https://github.com/KirilyakSA/HiveMonitorESP/issues/37)
+### 16. Схема расположения ульев / Apiary Hive Layout Map - [#37](https://github.com/KirilyakSA/HiveMonitorESP/issues/37)
 
 RU: Цель - хранить и показывать абстрактную схему расположения ульев на пасеке без GPS-координат каждого улья.
 
@@ -317,7 +342,7 @@ EN: Goal - store and display an abstract apiary hive layout without GPS coordina
 - RU: статусы, алармы, теги и задачи как визуальные слои на схеме.
   EN: statuses, alerts, tags and tasks as visual layers on the layout.
 
-### 16. Weather analytics / Погодная аналитика - [#38](https://github.com/KirilyakSA/HiveMonitorESP/issues/38)
+### 17. Weather analytics / Погодная аналитика - [#38](https://github.com/KirilyakSA/HiveMonitorESP/issues/38)
 
 RU: Цель - превратить погодный контекст в аналитический слой, который объясняет телеметрию ульев.
 
@@ -334,7 +359,7 @@ EN: Goal - turn weather context into an analytics layer that explains hive telem
 - RU: погодные слои на графиках и агрегаты для отчетов.
   EN: weather layers on charts and aggregates for reports.
 
-### 17. Прогноз медосбора / Honey Flow Forecast - [#39](https://github.com/KirilyakSA/HiveMonitorESP/issues/39)
+### 18. Прогноз медосбора / Honey Flow Forecast - [#39](https://github.com/KirilyakSA/HiveMonitorESP/issues/39)
 
 RU: Цель - прогнозировать потенциал медосбора по медоносам, цветению, погоде и динамике веса ульев.
 
@@ -351,7 +376,7 @@ EN: Goal - forecast honey flow potential using honey plants, bloom periods, weat
 - RU: показывать прогноз ожидаемого взятка, изменения потенциала и завершения активного периода.
   EN: show forecast for expected flow, potential changes and active period ending.
 
-### 18. Антироевые подсказки / Anti-Swarming Recommendations - [#40](https://github.com/KirilyakSA/HiveMonitorESP/issues/40)
+### 19. Антироевые подсказки / Anti-Swarming Recommendations - [#40](https://github.com/KirilyakSA/HiveMonitorESP/issues/40)
 
 RU: Цель - помогать пасечнику замечать риск роения и планировать безопасные действия-подсказки без жесткого автопилота.
 
@@ -368,7 +393,7 @@ EN: Goal - help the beekeeper notice swarming risk and plan safe recommendation-
 - RU: связь подсказки с календарной задачей.
   EN: link recommendation with a calendar task.
 
-### 19. Защита от кражи, GPS и наклон / Theft, GPS and Tilt Monitoring - [#41](https://github.com/KirilyakSA/HiveMonitorESP/issues/41)
+### 20. Защита от кражи, GPS и наклон / Theft, GPS and Tilt Monitoring - [#41](https://github.com/KirilyakSA/HiveMonitorESP/issues/41)
 
 RU: Цель - защитить удаленные пасеки от кражи и вандализма. Первый MVP должен использовать уже доступные сигналы: вес, датчик открытия, RSSI, батарея и missed telemetry. GPS/tilt/удар датчики остаются следующим расширением.
 
@@ -397,7 +422,7 @@ EN: Goal - protect remote apiaries from theft and vandalism. The first MVP shoul
 - RU: настройки чувствительности и режим охраны.
   EN: sensitivity settings and armed mode.
 
-### 20. Анализ звука ульев / Hive Audio Analysis - [#42](https://github.com/KirilyakSA/HiveMonitorESP/issues/42)
+### 21. Анализ звука ульев / Hive Audio Analysis - [#42](https://github.com/KirilyakSA/HiveMonitorESP/issues/42)
 
 RU: Цель - добавить audio analysis как будущую premium/AI-функцию.
 
@@ -416,7 +441,7 @@ EN: Goal - add audio analysis as a future premium/AI feature.
 - RU: показывать объяснимые подсказки и уверенность модели без жестких диагнозов.
   EN: show explainable recommendations and model confidence without hard diagnoses.
 
-### 21. Анализ изображений рамок / Frame Image Analysis - [#43](https://github.com/KirilyakSA/HiveMonitorESP/issues/43)
+### 22. Анализ изображений рамок / Frame Image Analysis - [#43](https://github.com/KirilyakSA/HiveMonitorESP/issues/43)
 
 RU: Цель - добавить image analysis рамок как AI-функцию, связанную с журналом осмотров.
 
@@ -435,7 +460,7 @@ EN: Goal - add frame image analysis as an AI feature linked to the inspection jo
 - RU: связь с журналом осмотров и рекомендациями.
   EN: link to inspection journal and recommendations.
 
-### 22. AI-помощник пасечника / Beekeeper AI Assistant - [#44](https://github.com/KirilyakSA/HiveMonitorESP/issues/44)
+### 23. AI-помощник пасечника / Beekeeper AI Assistant - [#44](https://github.com/KirilyakSA/HiveMonitorESP/issues/44)
 
 RU: Цель - premium AI-помощник, который объясняет данные и помогает планировать работы.
 

@@ -120,6 +120,17 @@ firmware/
 
 Калибровка через backend переносится после MVP.
 
+Следующий целевой workflow вынесен в backlog [#45](https://github.com/KirilyakSA/HiveMonitorESP/issues/45):
+
+- RU: отдельная калибровка весов локально и через backend command API.
+  EN: separate scale calibration locally and through backend command API.
+- RU: тарирование пустого улья без рамок, но с крышкой, с сохранением базового веса улья.
+  EN: tare an empty hive without frames but with cover and store the hive baseline weight.
+- RU: второе тарирование при установке пустого магазина: сохранить вес семьи с рамками и базовый вес магазина.
+  EN: second tare when adding an empty super: store colony-with-frames weight and super baseline weight.
+- RU: firmware должна возвращать ack/result операции для backend-журнала.
+  EN: firmware must return operation ack/result for the backend journal.
+
 ## MQTT topics и совместимость с backend
 
 Firmware публикует legacy topics, если `apiaryId` не задан:
