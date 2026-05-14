@@ -1136,9 +1136,9 @@ a {
 .hive-table-head,
 .hive-table-row {
   display: grid;
-  grid-template-columns: 90px 150px 98px 160px 84px 118px 140px 128px 82px;
+  grid-template-columns: 170px 150px 98px 160px 84px 118px 140px 128px 82px;
   align-items: center;
-  min-width: 1050px;
+  min-width: 1130px;
   gap: 8px;
 }
 
@@ -1167,10 +1167,25 @@ a {
   box-shadow: inset 3px 0 0 #f5a600;
 }
 
-.hive-table-row > span:first-child {
+.hive-name-cell {
   display: flex;
   align-items: center;
   gap: 7px;
+  min-width: 0;
+}
+
+.hive-name-cell b {
+  flex: 0 0 auto;
+}
+
+.hive-name-cell em {
+  min-width: 0;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-pill {

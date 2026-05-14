@@ -586,7 +586,6 @@ export function DevicesPanel({ devices, hives, busy, onAssign }: {
         ))}
       </div>
       {devices.length === 0 && <EmptyInline text="Новых устройств нет" />}
-      <button className="text-link">Все устройства</button>
     </section>
   );
 }
@@ -768,7 +767,7 @@ export function HivesTable({
       </div>
       <div className="hive-table">
         <div className="hive-table-head">
-          <span>№ улья</span><span>Тип улья</span><span>Статус</span><span>Изменение веса за сутки</span><span>Вес, кг</span><span>Температура</span><span>Алармы</span><span>Устройство</span><span>Обновлено</span>
+          <span>Улей</span><span>Тип улья</span><span>Статус</span><span>Изменение веса за сутки</span><span>Вес, кг</span><span>Температура</span><span>Алармы</span><span>Устройство</span><span>Обновлено</span>
         </div>
         {hives.map((hive) => {
           const readings = snapshots[hive.id] ?? [];
@@ -778,7 +777,7 @@ export function HivesTable({
           const delta = indexed.weight_change;
           return (
             <button key={hive.id} className={`hive-table-row ${hive.id === selectedHiveId ? "selected" : ""}`} onClick={() => onSelectHive(hive.id)}>
-              <span><ChevronDown size={14} /><b>{hive.number || shortId(hive.id)}</b></span>
+              <span className="hive-name-cell"><ChevronDown size={14} /><b>{hive.number || shortId(hive.id)}</b><em>{hive.name || "Без названия"}</em></span>
               <span>{hive.type || "Дадан"}{hive.super_count ? " с магазином" : ""}</span>
               <StatusPill status={effectiveHiveStatus(hive, readings)} />
               <WeightDelta reading={delta} />
