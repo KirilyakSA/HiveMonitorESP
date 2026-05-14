@@ -497,8 +497,8 @@ readings as (
     from samples
     cross join lateral (
         values
-            ('weight', base_weight + (age_index * trend) + sin(step::double precision / 13.0) * 0.45 + sin(age_index::double precision / 73.0) * 0.9, 'kg'),
-            ('weight_change', trend * 24.0 + sin(step::double precision / 8.0) * 0.2, 'kg'),
+            ('weight', greatest(12.0, base_weight + (age_index * trend) + sin(step::double precision / 13.0) * 0.45 + sin(age_index::double precision / 73.0) * 0.9), 'kg'),
+            ('weight_change', greatest(-4.0, trend * 24.0 + sin(step::double precision / 8.0) * 0.2), 'kg'),
             ('temperature', base_temp + sin(step::double precision / 5.0) * 0.8, '°C'),
             ('humidity', base_humidity + cos(step::double precision / 6.0) * 3.0, '%'),
             ('battery_percent', greatest(12.0, base_battery - (age_index::double precision * 0.01)), '%'),
