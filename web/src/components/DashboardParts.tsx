@@ -875,6 +875,7 @@ export function HiveDetail({ hive, state, latestByMetric, onLoadHistory, onClose
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>("overview");
   const [chartPeriod, setChartPeriod] = useState<ChartPeriod>("1d");
+  const alertEvents = state.events.filter(isAlertEvent);
 
   useEffect(() => {
     setActiveTab("overview");
@@ -900,7 +901,13 @@ export function HiveDetail({ hive, state, latestByMetric, onLoadHistory, onClose
 
       {activeTab === "overview" && (
         <>
-          <div className="warning-box"><AlertTriangle size={17} />Есть предупреждения <button type="button" onClick={() => setActiveTab("history")}>Все аларты (1)</button></div>
+          {alertEvents.length > 0 ? (
+            <div className="warning-box">
+              <AlertTriangle size={17} />
+              Есть предупреждения
+              <button type="button" onClick={() => setActiveTab("history")}>Все аларты ({alertEvents.length})</button>
+            </div>
+          ) : null}
           <div className="hive-media">
             <HiveImage hive={hive} />
             <div>
@@ -1458,6 +1465,10 @@ function groupEvents(events: DeviceEvent[]): Record<EventTab, DeviceEvent[]> {
 
 function isScheduledEvent(event: DeviceEvent) {
   return event.event_type === "task" || event.event_type === "scheduled_task" || event.event_type === "reminder";
+}
+
+function isAlertEvent(event: DeviceEvent) {
+  return event.ok === false || event.event_type === "alert" || event.event_type === "warning";
 }
 
 export async function refreshAll(client: ApiClient, setters: {
