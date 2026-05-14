@@ -10,6 +10,7 @@
 | --- | --- | --- |
 | `api-service` | REST API для web/mobile, авторизация, организации, пасеки, ульи, устройства, телеметрия | `backend/cmd/api-service` |
 | `mqtt-ingestion-service` | Прием MQTT telemetry/events/status от устройств и запись в PostgreSQL | `backend/cmd/mqtt-ingestion-service` |
+| `worker-service` | Фоновые backend jobs: статусы календарных задач и счетчик пропущенной телеметрии | `backend/cmd/worker-service` |
 | PostgreSQL | Основная база данных | Docker volume `deploy_postgres-data` |
 | NATS + JetStream | Внутренняя шина событий для дальнейших сервисов уведомлений, AI, OTA, reminders | Docker volume `deploy_nats-data` |
 | Mosquitto | MQTT broker для IoT-устройств | `deploy/mosquitto/mosquitto.conf` |
@@ -131,7 +132,7 @@ cp deploy/.env.example deploy/.env
 | `POSTGRES_DB` | Имя базы данных | PostgreSQL |
 | `POSTGRES_USER` | Пользователь базы | PostgreSQL |
 | `POSTGRES_PASSWORD` | Пароль пользователя базы | PostgreSQL |
-| `DATABASE_URL` | Строка подключения backend к PostgreSQL | `api-service`, `mqtt-ingestion-service` |
+| `DATABASE_URL` | Строка подключения backend к PostgreSQL | `api-service`, `mqtt-ingestion-service`, `worker-service` |
 | `JWT_SECRET` | Секрет подписи access token | `api-service` |
 | `NATS_URL` | Адрес NATS | backend services |
 | `MQTT_BROKER_URL` | Адрес MQTT broker | `mqtt-ingestion-service` |
@@ -148,6 +149,7 @@ cp deploy/.env.example deploy/.env
 | `MQTT_TELEMETRY_TOPIC` | список telemetry/events/status topics | MQTT topics для подписки backend |
 | `DEFAULT_APIARY_ID` | пусто | Fallback apiary id для legacy-сценариев |
 | `DEFAULT_TELEMETRY_INTERVAL_MINUTES` | `30` | Ожидаемый интервал передачи данных |
+| `WORKER_TICK_SECONDS` | `60` | Интервал запуска фоновых jobs `worker-service` |
 
 ## Генерация секретов
 

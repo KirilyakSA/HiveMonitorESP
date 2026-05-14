@@ -6,6 +6,8 @@ Backend принимает телеметрию IoT-устройств, хран
 
 Подробное описание архитектуры backend, сервисов, файлов и данных: [architecture.md](architecture.md).
 
+Границы текущих и будущих backend-сервисов: [service-boundaries.md](service-boundaries.md).
+
 Сводка по соответствию реализации и ТЗ: [../../docs/implementation-status.md](../../docs/implementation-status.md).
 
 Текущая backend-очередь работ / Current backend backlog: [backlog.md](backlog.md).
@@ -28,6 +30,7 @@ Backend принимает телеметрию IoT-устройств, хран
 ```text
 cmd/api-service
 cmd/mqtt-ingestion-service
+cmd/worker-service
 internal/
 migrations/
 ```
@@ -57,6 +60,7 @@ migrations/
 - Стартовый адаптируемый календарь пасечных работ.
 - Seed базы советов, задач, медоносов и периодов цветения.
 - API советов dashboard и календарных задач пасеки.
+- Worker service для обновления статусов календарных задач и счетчика пропущенной телеметрии.
 
 ## MQTT
 

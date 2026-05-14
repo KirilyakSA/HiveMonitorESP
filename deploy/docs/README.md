@@ -31,7 +31,8 @@ deploy/docker-compose.yml
 - `nats` - NATS с JetStream;
 - `mosquitto` - MQTT broker;
 - `api-service` - REST API backend;
-- `mqtt-ingestion-service` - MQTT consumer телеметрии, device events и device status.
+- `mqtt-ingestion-service` - MQTT consumer телеметрии, device events и device status;
+- `worker-service` - фоновые jobs для статусов задач и пропущенной телеметрии.
 
 Порты:
 
@@ -72,6 +73,7 @@ NATS запускается с JetStream:
 telemetry.received
 device.event.received
 device.status.received
+worker.tick.completed
 ```
 
 Будущие сервисы будут использовать NATS для notifications, reminders, alerts, weather polling, OTA и AI jobs.

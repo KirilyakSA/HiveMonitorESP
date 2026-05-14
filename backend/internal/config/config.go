@@ -21,6 +21,7 @@ type Config struct {
 	MQTTTelemetryTopic    string
 	DefaultAPIaryID       string
 	DefaultIntervalMinute int
+	WorkerTickInterval    time.Duration
 }
 
 func Load() Config {
@@ -38,6 +39,7 @@ func Load() Config {
 		MQTTTelemetryTopic:    env("MQTT_TELEMETRY_TOPIC", "hives/+/telemetry,apiaries/+/devices/+/telemetry,hives/+/events,apiaries/+/devices/+/events,hives/+/status,apiaries/+/devices/+/status"),
 		DefaultAPIaryID:       env("DEFAULT_APIARY_ID", ""),
 		DefaultIntervalMinute: envInt("DEFAULT_TELEMETRY_INTERVAL_MINUTES", 30),
+		WorkerTickInterval:    time.Duration(envInt("WORKER_TICK_SECONDS", 60)) * time.Second,
 	}
 }
 

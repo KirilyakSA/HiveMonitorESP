@@ -16,6 +16,7 @@ Go backend HiveMonitor.
 ```text
 cmd/api-service              REST API для web/mobile
 cmd/mqtt-ingestion-service   MQTT consumer телеметрии
+cmd/worker-service           Фоновые jobs: статусы задач и пропущенная телеметрия
 ```
 
 ## Локальный запуск
@@ -43,6 +44,12 @@ go run ./cmd/api-service
 
 ```bash
 go run ./cmd/mqtt-ingestion-service
+```
+
+Запустить фоновые jobs:
+
+```bash
+go run ./cmd/worker-service
 ```
 
 ## Тестовые данные
@@ -89,6 +96,7 @@ docker exec -i deploy-postgres-1 psql -U hivemonitor -d hivemonitor < backend/se
 - адаптируемый календарь пасечных работ;
 - API советов и сезонных рекомендаций;
 - API задач пасеки с выполнением, откладыванием и скрытием.
+- фоновый `worker-service`, который обновляет `due` / `overdue` статусы задач и счетчик пропущенных передач телеметрии.
 
 ## API календаря и советов
 
@@ -103,3 +111,5 @@ PATCH /apiaries/{apiaryID}/advice/{adviceCode}
 Советы формулируются как подсказки: “проверьте”, “запланируйте”, “обратите внимание”. Seed не содержит дозировок препаратов и не дает безусловных ветеринарных инструкций.
 
 Подробная документация: [backend/docs](docs/README.md).
+
+Границы текущих и будущих backend-сервисов: [backend/docs/service-boundaries.md](docs/service-boundaries.md).

@@ -1061,6 +1061,54 @@ func (r *Repository) UpdateApiaryTaskDueStatuses(ctx context.Context, apiaryID s
 	return err
 }
 
+func (r *Repository) UpdateAllApiaryTaskDueStatuses(ctx context.Context, now time.Time) (int64, error) {
+	tag, err := r.db.Exec(ctx, `
+		with next_status as (
+			select
+				id,
+				case when due_at < $1 then 'overdue' else 'due' end as status
+			from apiary_tasks
+			where status in ('planned', 'due', 'overdue')
+				and due_at is not null
+				and due_at <= $2
+		)
+		update apiary_tasks
+		set status = next_status.status,
+			updated_at = now()
+		from next_status
+		where apiary_tasks.id = next_status.id
+			and apiary_tasks.status <> next_status.status
+	`, now.Add(-24*time.Hour), now)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+func (r *Repository) UpdateMissedTelemetryCounts(ctx context.Context, now time.Time) (int64, error) {
+	tag, err := r.db.Exec(ctx, `
+		with missed as (
+			select
+				id,
+				floor(extract(epoch from ($1 - expected_next_telemetry_at)) / (telemetry_interval_minutes * 60))::integer + 1 as missed_count
+			from devices
+			where expected_next_telemetry_at is not null
+				and expected_next_telemetry_at < $1
+				and telemetry_interval_minutes > 0
+		)
+		update devices
+		set missed_telemetry_count = missed.missed_count,
+			updated_at = now()
+		from missed
+		where devices.id = missed.id
+			and missed.missed_count > devices.missed_telemetry_count
+	`, now)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 func (r *Repository) ListApiaryTasks(ctx context.Context, userID, apiaryID string, from, to time.Time) ([]domain.ApiaryTask, error) {
 	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
 	if err != nil {

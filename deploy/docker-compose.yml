@@ -78,6 +78,21 @@ services:
       mosquitto:
         condition: service_started
 
+  worker-service:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    command: ["/app/worker-service"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://hivemonitor:hivemonitor@postgres:5432/hivemonitor?sslmode=disable}
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      WORKER_TICK_SECONDS: ${WORKER_TICK_SECONDS:-60}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      nats:
+        condition: service_started
+
 volumes:
   postgres-data:
   nats-data:
