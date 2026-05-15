@@ -27,10 +27,19 @@ type Server struct {
 	bus      *events.Bus
 	logger   *slog.Logger
 	calendar *beekeeping.Service
+	commands commandPublisher
 }
 
-func NewServer(cfg config.Config, repo *repository.Repository, bus *events.Bus, logger *slog.Logger) *Server {
-	return &Server{cfg: cfg, repo: repo, bus: bus, logger: logger, calendar: beekeeping.New(repo)}
+type commandPublisher interface {
+	PublishDeviceCommand(ctx context.Context, command domain.DeviceCommand) ([]string, error)
+}
+
+func NewServer(cfg config.Config, repo *repository.Repository, bus *events.Bus, logger *slog.Logger, publishers ...commandPublisher) *Server {
+	var publisher commandPublisher
+	if len(publishers) > 0 {
+		publisher = publishers[0]
+	}
+	return &Server{cfg: cfg, repo: repo, bus: bus, logger: logger, calendar: beekeeping.New(repo), commands: publisher}
 }
 
 func (s *Server) Routes() http.Handler {
@@ -61,10 +70,15 @@ func (s *Server) Routes() http.Handler {
 		r.Route("/apiaries", func(r chi.Router) {
 			r.Get("/", s.listApiaries)
 			r.Post("/", s.createApiary)
+			r.Delete("/{apiaryID}", s.deleteApiary)
 			r.Get("/{apiaryID}/hives", s.listHives)
 			r.Post("/{apiaryID}/hives", s.createHive)
 			r.Get("/{apiaryID}/devices/unassigned", s.listUnassignedDevices)
+			r.Get("/{apiaryID}/devices/{deviceUUID}", s.getDevice)
+			r.Delete("/{apiaryID}/devices/{deviceUUID}", s.deleteDevice)
 			r.Post("/{apiaryID}/devices/{deviceUUID}/assign", s.assignDevice)
+			r.Get("/{apiaryID}/devices/{deviceUUID}/commands", s.listDeviceCommands)
+			r.Post("/{apiaryID}/devices/{deviceUUID}/commands", s.createDeviceCommand)
 			r.Get("/{apiaryID}/events", s.apiaryEvents)
 			r.Get("/{apiaryID}/advice", s.apiaryAdvice)
 			r.Patch("/{apiaryID}/advice/{adviceCode}", s.updateAdviceState)
@@ -74,6 +88,7 @@ func (s *Server) Routes() http.Handler {
 		})
 
 		r.Route("/hives", func(r chi.Router) {
+			r.Delete("/{hiveID}", s.deleteHive)
 			r.Get("/{hiveID}/telemetry/latest", s.latestTelemetry)
 			r.Get("/{hiveID}/telemetry/history", s.telemetryHistory)
 			r.Get("/{hiveID}/events", s.hiveEvents)
@@ -236,6 +251,24 @@ func (s *Server) listApiaries(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, apiaries)
 }
 
+func (s *Server) deleteApiary(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ConfirmName string `json:"confirm_name"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if strings.TrimSpace(input.ConfirmName) == "" {
+		writeError(w, http.StatusBadRequest, "confirm_name is required")
+		return
+	}
+	if err := s.repo.DeleteApiary(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "apiaryID"), input.ConfirmName); err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) createHive(w http.ResponseWriter, r *http.Request) {
 	var input domain.Hive
 	if !decodeJSON(w, r, &input) {
@@ -263,6 +296,14 @@ func (s *Server) listHives(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, hives)
 }
 
+func (s *Server) deleteHive(w http.ResponseWriter, r *http.Request) {
+	if err := s.repo.DeleteHive(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "hiveID")); err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) listUnassignedDevices(w http.ResponseWriter, r *http.Request) {
 	devices, err := s.repo.ListUnassignedDevices(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "apiaryID"))
 	if err != nil {
@@ -270,6 +311,23 @@ func (s *Server) listUnassignedDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, devices)
+}
+
+func (s *Server) getDevice(w http.ResponseWriter, r *http.Request) {
+	device, err := s.repo.GetDevice(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "apiaryID"), chi.URLParam(r, "deviceUUID"))
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, device)
+}
+
+func (s *Server) deleteDevice(w http.ResponseWriter, r *http.Request) {
+	if err := s.repo.DeleteDevice(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "apiaryID"), chi.URLParam(r, "deviceUUID")); err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) assignDevice(w http.ResponseWriter, r *http.Request) {
@@ -299,6 +357,91 @@ func (s *Server) assignDevice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, assignment)
+}
+
+func (s *Server) listDeviceCommands(w http.ResponseWriter, r *http.Request) {
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	commands, err := s.repo.ListDeviceCommands(
+		r.Context(),
+		userIDFromContext(r.Context()),
+		chi.URLParam(r, "apiaryID"),
+		chi.URLParam(r, "deviceUUID"),
+		limit,
+	)
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, commands)
+}
+
+func (s *Server) createDeviceCommand(w http.ResponseWriter, r *http.Request) {
+	var input domain.CreateDeviceCommandInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	input.Command = strings.TrimSpace(input.Command)
+	if !allowedDeviceCommand(input.Command) {
+		writeError(w, http.StatusBadRequest, "unsupported command")
+		return
+	}
+	if len(input.Payload) == 0 {
+		input.Payload = json.RawMessage(`{}`)
+	}
+	if !json.Valid(input.Payload) {
+		writeError(w, http.StatusBadRequest, "payload must be valid JSON")
+		return
+	}
+
+	command, err := s.repo.CreateDeviceCommand(
+		r.Context(),
+		userIDFromContext(r.Context()),
+		chi.URLParam(r, "apiaryID"),
+		chi.URLParam(r, "deviceUUID"),
+		input,
+	)
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+
+	if s.commands == nil {
+		updated, updateErr := s.repo.MarkDeviceCommandFailed(r.Context(), command.ID, "mqtt command publisher is not configured", nil)
+		if updateErr != nil {
+			s.internalError(w, updateErr)
+			return
+		}
+		writeJSON(w, http.StatusCreated, updated)
+		return
+	}
+
+	publishCtx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+	topics, err := s.commands.PublishDeviceCommand(publishCtx, *command)
+	if err != nil {
+		updated, updateErr := s.repo.MarkDeviceCommandFailed(r.Context(), command.ID, err.Error(), topics)
+		if updateErr != nil {
+			s.internalError(w, updateErr)
+			return
+		}
+		writeJSON(w, http.StatusCreated, updated)
+		return
+	}
+	updated, err := s.repo.MarkDeviceCommandPublished(r.Context(), command.ID, topics)
+	if err != nil {
+		s.internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, updated)
+}
+
+func allowedDeviceCommand(command string) bool {
+	switch command {
+	case "reboot", "restart", "firmware_update", "config_update", "hold_config_session", "capture_weight", "finish_config_session":
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Server) latestTelemetry(w http.ResponseWriter, r *http.Request) {
@@ -517,6 +660,10 @@ func (s *Server) internalError(w http.ResponseWriter, err error) {
 func (s *Server) handleRepoError(w http.ResponseWriter, err error) {
 	if errors.Is(err, repository.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if errors.Is(err, repository.ErrInvalidInput) {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	s.internalError(w, err)

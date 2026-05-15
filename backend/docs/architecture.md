@@ -128,15 +128,18 @@ POST /organizations/
 
 GET  /apiaries/
 POST /apiaries/
+DELETE /apiaries/{apiaryID}
 GET  /apiaries/{apiaryID}/hives
 POST /apiaries/{apiaryID}/hives
 GET  /apiaries/{apiaryID}/devices/unassigned
+DELETE /apiaries/{apiaryID}/devices/{deviceUUID}
 POST /apiaries/{apiaryID}/devices/{deviceUUID}/assign
 GET  /apiaries/{apiaryID}/events
 
 GET  /hives/{hiveID}/telemetry/latest
 GET  /hives/{hiveID}/telemetry/history
 GET  /hives/{hiveID}/events
+DELETE /hives/{hiveID}
 ```
 
 ### 4.2 mqtt-ingestion-service
@@ -199,6 +202,39 @@ apiaries/{apiaryId}/devices/{deviceId}/config
 ```
 
 Backend MVP обрабатывает telemetry, device events и device status. `commands` и `config` являются следующими backend-инкрементами.
+
+Backend command API MVP публикует команды в оба command topic:
+
+```text
+apiaries/{apiaryId}/devices/{deviceId}/commands
+hives/{deviceId}/commands
+```
+
+Payload команды:
+
+```json
+{
+  "id": "command_uuid",
+  "command": "reboot",
+  "payload": {},
+  "created_at": "2026-05-15T06:00:00Z",
+  "expires_at": "2026-05-15T06:10:00Z"
+}
+```
+
+Поддержанные backend-команды устройства MVP: `reboot`, `firmware_update`, `config_update`, `hold_config_session`, `capture_weight`, `finish_config_session`. `restart` временно поддерживается как legacy alias.
+
+Логика выполнения:
+
+- `reboot`, `firmware_update`, `config_update` ставятся в очередь и выполняются при следующем пробуждении устройства. UI предупреждает, что для немедленного выполнения устройство нужно разбудить вручную.
+- firmware tare и калибровка весов не являются backend-командами. Они выполняются локально в web-интерфейсе устройства: firmware tare сбрасывает весы устройства в ноль, calibration flow использует калибровочные веса 1 кг, 100 г и 10 г.
+- тара улья и тара магазинов не отправляются на устройство. Backend хранит тару как параметр улья/магазина и вычитает ее из сырого веса, который приходит от устройства.
+- для backend-тары устройство участвует только как источник одноразового raw weight: UI отправляет `hold_config_session`, после подготовки улья/магазина отправляет `capture_weight`, затем при любом закрытии мастера отправляет `finish_config_session`.
+- мастер backend-тары улья: вынуть рамки, вернуть крышку/потолочины/утепление/оборудование кроме рамок, взять текущий сырой вес как тару пустого улья, сохранить в `scale_profile`, считать дальнейший вес относительно этого нуля.
+- мастер backend-тары магазина: сохранить тару магазина 2/3/4...; при снятии магазина сбрасывать соответствующую тару и возвращать ноль к предыдущей активной таре.
+- отдельной команды `measure` нет: sleeping-устройство при физическом пробуждении само делает замеры и отправляет телеметрию.
+
+`scale_profile`, история тарирования и пересчет веса относительно активной тары будут добавлены отдельным backend-инкрементом.
 
 Для legacy telemetry topic `hives/{deviceId}/telemetry` в topic нет `apiary_id`. Поэтому есть два рабочих сценария:
 
@@ -950,6 +986,34 @@ keep
 
 Новый улей по умолчанию создается со статусом `no_device`. В UI такой улей должен отображаться как `Нет устройства`, пока к нему не привязали реальное устройство и по нему не появилась телеметрия.
 
+## 10.1 Удаление пасек, ульев и устройств
+
+MVP реализует hard-delete endpoints для dev/MVP workflow и E2E:
+
+```http
+DELETE /apiaries/{apiaryID}
+DELETE /hives/{hiveID}
+DELETE /apiaries/{apiaryID}/devices/{deviceUUID}
+```
+
+`DELETE /apiaries/{apiaryID}` принимает JSON body:
+
+```json
+{
+  "confirm_name": "Название пасеки"
+}
+```
+
+Поведение MVP:
+
+- удаление пасеки требует точного подтверждения имени;
+- удаление пасеки удаляет связанные readings, events, raw payloads, device assignments, devices и саму пасеку;
+- удаление улья удаляет readings/events улья, закрывает active assignments, возвращает устройства в `unassigned`, затем удаляет улей;
+- удаление устройства удаляет readings/events/raw payloads/assignments устройства, затем удаляет устройство;
+- все операции проверяют доступ пользователя к пасеке.
+
+После MVP нужно добавить soft-delete/archive policy, audit trail и более подробные режимы сохранения истории.
+
 ## 11. latest/history telemetry
 
 Latest endpoint:
@@ -1083,11 +1147,14 @@ POST /apiaries/{id}/hives
 MQTT publish telemetry
 MQTT publish device event/status
 GET /apiaries/{id}/devices/unassigned
+DELETE /apiaries/{id}/devices/{deviceUUID}
 POST /apiaries/{id}/devices/{deviceUUID}/assign
 GET /hives/{id}/telemetry/latest
 GET /hives/{id}/telemetry/history
 GET /apiaries/{id}/events
 GET /hives/{id}/events
+DELETE /hives/{id}
+DELETE /apiaries/{id}
 ```
 
 Фактический результат:

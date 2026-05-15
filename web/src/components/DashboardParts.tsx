@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -36,6 +36,7 @@ import {
   Apiary,
   ApiaryTask,
   Device,
+  DeviceCommand,
   DeviceEvent,
   Hive,
   Organization,
@@ -262,6 +263,7 @@ export function ApiariesScreen({
   selectedApiaryId,
   onSelectApiary,
   onOpenApiary,
+  onDeleteApiary,
   onCreateApiary,
   busy
 }: {
@@ -271,6 +273,7 @@ export function ApiariesScreen({
   selectedApiaryId: string;
   onSelectApiary: (id: string) => void;
   onOpenApiary: (id: string) => void;
+  onDeleteApiary: (apiary: Apiary) => void | Promise<void>;
   onCreateApiary: (input: Partial<Apiary> & { name: string }) => void | Promise<void>;
   busy: boolean;
 }) {
@@ -326,7 +329,7 @@ export function ApiariesScreen({
           <ApiaryMap apiaries={apiaries} selectedApiaryId={selectedApiaryId} onSelectApiary={onSelectApiary} />
         </section>
 
-        <ApiarySelectionPanel apiary={selectedApiary} summary={selectedSummary} onOpenApiary={onOpenApiary} />
+        <ApiarySelectionPanel apiary={selectedApiary} summary={selectedSummary} onOpenApiary={onOpenApiary} onDeleteApiary={onDeleteApiary} />
       </div>
 
       {formOpen && (
@@ -359,7 +362,12 @@ function ApiaryListRow({ apiary, summary, selected, onSelect }: { apiary: Apiary
   );
 }
 
-function ApiarySelectionPanel({ apiary, summary, onOpenApiary }: { apiary?: Apiary; summary?: ApiarySummary; onOpenApiary: (id: string) => void }) {
+function ApiarySelectionPanel({ apiary, summary, onOpenApiary, onDeleteApiary }: {
+  apiary?: Apiary;
+  summary?: ApiarySummary;
+  onOpenApiary: (id: string) => void;
+  onDeleteApiary: (apiary: Apiary) => void | Promise<void>;
+}) {
   if (!apiary) {
     return (
       <aside className="panel-card apiary-detail-panel empty-detail">
@@ -389,6 +397,7 @@ function ApiarySelectionPanel({ apiary, summary, onOpenApiary }: { apiary?: Apia
         <ReadingBox label="События" value={summary?.eventCount ?? 0} />
       </div>
       <button className="primary-action" type="button" onClick={() => onOpenApiary(apiary.id)}>Перейти к пасеке <ArrowUpRight size={17} /></button>
+      <button className="danger-action" type="button" onClick={() => onDeleteApiary(apiary)}>Удалить пасеку</button>
     </aside>
   );
 }
@@ -567,11 +576,12 @@ function EventTabButton({ active, count, onClick, children }: { active: boolean;
   );
 }
 
-export function DevicesPanel({ devices, hives, busy, onAssign }: {
+export function DevicesPanel({ devices, hives, busy, onAssign, onDelete }: {
   devices: Device[];
   hives: Hive[];
   busy: boolean;
   onAssign: (deviceId: string, hiveId: string, importMode: string, replaceExisting: boolean) => void | Promise<void>;
+  onDelete: (deviceId: string) => void | Promise<void>;
 }) {
   return (
     <section className="panel-card devices-panel">
@@ -582,6 +592,7 @@ export function DevicesPanel({ devices, hives, busy, onAssign }: {
             <Radio size={20} />
             <div><strong>{device.device_id}</strong><span>{device.device_type}</span></div>
             <QuickAssign device={device} hives={hives} busy={busy} onAssign={onAssign} />
+            <button className="small-danger" type="button" disabled={busy} onClick={() => onDelete(device.id)}>Удалить</button>
           </div>
         ))}
       </div>
@@ -866,11 +877,17 @@ export function ComparisonPanel({
   );
 }
 
-export function HiveDetail({ hive, state, latestByMetric, onLoadHistory, onClose }: {
+export function HiveDetail({ hive, state, latestByMetric, commands, device, onLoadHistory, onDeleteHive, onDeleteDevice, onSendCommand, onLoadDevice, onClose }: {
   hive: Hive;
   state: HiveState;
   latestByMetric: Record<string, SensorReading>;
+  commands: DeviceCommand[];
+  device?: Device | null;
   onLoadHistory: (period: ChartPeriod) => Promise<void>;
+  onDeleteHive: () => void | Promise<void>;
+  onDeleteDevice?: () => void | Promise<void>;
+  onSendCommand?: (command: string, payload?: Record<string, unknown>) => DeviceCommand | void | Promise<DeviceCommand | void>;
+  onLoadDevice?: () => Promise<Device>;
   onClose: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>("overview");
@@ -926,6 +943,7 @@ export function HiveDetail({ hive, state, latestByMetric, onLoadHistory, onClose
             <ReadingMini title="Батарея" reading={latestByMetric.battery_percent} />
             <ReadingMini title="RSSI" reading={latestByMetric.rssi} />
           </div>
+          <DeviceCommandPanel commands={commands} device={device} disabled={!onSendCommand || state.loading} onSendCommand={onSendCommand} onLoadDevice={onLoadDevice} />
         </>
       )}
 
@@ -950,9 +968,310 @@ export function HiveDetail({ hive, state, latestByMetric, onLoadHistory, onClose
       <div className="detail-actions">
         <button className="ghost" type="button" onClick={() => { setActiveTab("charts"); void onLoadHistory(chartPeriod); }} disabled={state.loading}><BarChart3 size={17} />Открыть графики</button>
         <button className="primary-action" type="button" onClick={() => setActiveTab("overview")}>Перейти к улью <ArrowUpRight size={17} /></button>
+        {onDeleteDevice && <button className="danger-action" type="button" onClick={onDeleteDevice}>Удалить устройство</button>}
+        <button className="danger-action" type="button" onClick={onDeleteHive}>Удалить улей</button>
       </div>
     </aside>
   );
+}
+
+function DeviceCommandPanel({
+  commands,
+  device,
+  disabled,
+  onSendCommand,
+  onLoadDevice
+}: {
+  commands: DeviceCommand[];
+  device?: Device | null;
+  disabled: boolean;
+  onSendCommand?: (command: string, payload?: Record<string, unknown>) => DeviceCommand | void | Promise<DeviceCommand | void>;
+  onLoadDevice?: () => Promise<Device>;
+}) {
+  const [pendingAction, setPendingAction] = useState<DeviceCommandAction | null>(null);
+  const latest = commands[0];
+  const actions: DeviceCommandAction[] = [
+    { command: "reboot", label: "Reboot", icon: Zap, mode: "deferred" },
+    { command: "backend_hive_tare", label: "Тара улья", icon: Box, mode: "tare", tareKind: "hive" },
+    { command: "backend_super_tare", label: "Тара магазина", icon: PackagePlus, mode: "tare", tareKind: "super" },
+    { command: "firmware_update", label: "Обновление прошивки", icon: ArrowUpRight, mode: "deferred" },
+    { command: "config_update", label: "Конфигурирование", icon: Settings, mode: "deferred" }
+  ];
+
+  return (
+    <section className="device-command-panel">
+      <div className="detail-section-title">
+        <h3>Команды устройства</h3>
+        <span>{latest ? commandStatusText(latest) : "команд пока нет"}</span>
+      </div>
+      <div className="command-actions">
+        {actions.map((action) => {
+          const Icon = action.icon;
+          return (
+            <button
+              key={action.command}
+              type="button"
+              className="command-button"
+              disabled={disabled}
+              onClick={() => setPendingAction(action)}
+            >
+              <Icon size={15} />
+              {action.label}
+            </button>
+          );
+        })}
+      </div>
+      {latest ? (
+        <div className={`command-status ${latest.status}`}>
+          <strong>{commandLabel(latest.command)}</strong>
+          <span>{commandStatusText(latest)}</span>
+          {latest.error_message ? <em>{latest.error_message}</em> : null}
+        </div>
+      ) : (
+        <EmptyInline text={onSendCommand ? "Выберите команду для обслуживания устройства." : "Улей пока без устройства."} />
+      )}
+      {pendingAction ? (
+        <DeviceCommandModal
+          action={pendingAction}
+          device={device}
+          onClose={() => setPendingAction(null)}
+          onSendCommand={onSendCommand}
+          onLoadDevice={onLoadDevice}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+type DeviceCommandAction = {
+  command: string;
+  label: string;
+  icon: LucideIcon;
+  mode: "deferred" | "tare";
+  tareKind?: "hive" | "super";
+};
+
+function DeviceCommandModal({
+  action,
+  device,
+  onClose,
+  onSendCommand,
+  onLoadDevice
+}: {
+  action: DeviceCommandAction;
+  device?: Device | null;
+  onClose: () => void;
+  onSendCommand?: (command: string, payload?: Record<string, unknown>) => DeviceCommand | void | Promise<DeviceCommand | void>;
+  onLoadDevice?: () => Promise<Device>;
+}) {
+  const [openedAt] = useState(() => new Date());
+  const [currentDevice, setCurrentDevice] = useState<Device | null>(device ?? null);
+  const [step, setStep] = useState<"wake" | "prepare" | "measure" | "save">("wake");
+  const [measuredWeight, setMeasuredWeight] = useState<number | null>(null);
+  const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const sessionClosed = useRef(false);
+  const isTare = action.mode === "tare";
+
+  async function refresh() {
+    if (!onLoadDevice) return;
+    setLoading(true);
+    setError("");
+    try {
+      setCurrentDevice(await onLoadDevice());
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Не удалось проверить устройство");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!isTare) return;
+    void onSendCommand?.("hold_config_session", { purpose: action.tareKind === "super" ? "super_tare" : "hive_tare" });
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 3000);
+    return () => window.clearInterval(timer);
+  }, [isTare]);
+
+  const wakeTime = latestWakeTime(currentDevice);
+  const awake = !isTare || Boolean(wakeTime && wakeTime.getTime() >= openedAt.getTime() - 2000);
+  const interval = currentDevice?.telemetry_interval_minutes || device?.telemetry_interval_minutes || 30;
+
+  async function submitDeferred() {
+    if (sending) return;
+    setSending(true);
+    try {
+      await onSendCommand?.(action.command, commandPayload(action));
+      onClose();
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function finishAndClose() {
+    if (sessionClosed.current) {
+      onClose();
+      return;
+    }
+    sessionClosed.current = true;
+    if (isTare) {
+      await onSendCommand?.("finish_config_session", { purpose: action.tareKind === "super" ? "super_tare" : "hive_tare" });
+    }
+    onClose();
+  }
+
+  async function captureTareWeight() {
+    if (!awake || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      const command = await onSendCommand?.("capture_weight", {
+        purpose: action.tareKind === "super" ? "super_tare" : "hive_tare"
+      });
+      const value = weightFromCommand(command);
+      if (value !== null) setMeasuredWeight(value);
+      setStep("measure");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Не удалось запросить замер веса");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="device-command-title">
+      <div className="assign-modal command-modal">
+        <div className="modal-head">
+          <div>
+            <span className="eyebrow">Команда устройства</span>
+            <h3 id="device-command-title">{action.label}</h3>
+          </div>
+          <button className="icon-button" type="button" onClick={() => void finishAndClose()} aria-label="Закрыть"><X size={18} /></button>
+        </div>
+
+        <div className={`wake-state ${awake && isTare ? "awake" : ""}`}>
+          <Radio size={24} />
+          <div>
+            <strong>{isTare ? awake ? "Устройство активно" : "Устройство спит" : "Команда будет выполнена при следующем пробуждении"}</strong>
+            <span>{isTare ? "Пока окно открыто, backend просит устройство не засыпать. Закрытие окна отпустит устройство командой завершения сессии." : `Обычно устройство просыпается примерно через ${interval} мин. Если действие нужно выполнить сейчас, разбудите устройство вручную.`}</span>
+          </div>
+        </div>
+
+        {isTare ? (
+          <>
+            <div className="assign-metrics">
+              <ReadingBox label="Статус" value={awake ? "активно" : "спит"} />
+              <ReadingBox label="Последний status" value={formatDeviceDate(currentDevice?.last_status_at)} />
+              <ReadingBox label="Последняя телеметрия" value={formatDeviceDate(currentDevice?.last_telemetry_at)} />
+            </div>
+            <TareWizardContent action={action} step={step} measuredWeight={measuredWeight} />
+            {error ? <div className="notice error">{error}</div> : null}
+          </>
+        ) : null}
+
+        <div className="form-actions">
+          {isTare ? (
+            <>
+              {step === "wake" && <button type="button" disabled={!awake} onClick={() => setStep("prepare")}>Далее</button>}
+              {step === "prepare" && <button type="button" disabled={!awake || sending} onClick={captureTareWeight}>{sending ? "Запрашиваем..." : "Замерить вес"}</button>}
+              {step === "measure" && <button type="button" disabled={measuredWeight === null} onClick={() => setStep("save")}>Сохранить тару</button>}
+              {step === "save" && <button type="button" onClick={() => void finishAndClose()}>Да, отпустить устройство</button>}
+              {step === "save" && <button type="button" className="ghost" onClick={() => { setMeasuredWeight(null); setStep("wake"); }}>Нет, повторить мастер</button>}
+              <button type="button" className="ghost" disabled={loading} onClick={refresh}>{loading ? "Проверяем..." : "Проверить снова"}</button>
+            </>
+          ) : (
+            <button type="button" disabled={sending} onClick={submitDeferred}>{sending ? "Отправляем..." : action.label}</button>
+          )}
+          <button type="button" className="ghost" onClick={() => void finishAndClose()}>Отмена</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TareWizardContent({ action, step, measuredWeight }: { action: DeviceCommandAction; step: string; measuredWeight: number | null }) {
+  if (step === "wake") {
+    return <p className="command-note">Разбудите устройство вручную или дождитесь его пробуждения. Тара будет сохранена только в backend как параметр улья/магазина, не в устройство.</p>;
+  }
+  if (step === "prepare") {
+    const text = action.tareKind === "super"
+      ? "Установите пустой магазин без рамок. После замера backend сохранит его тару как следующий слой магазина."
+      : "Выньте из улья все рамки. Верните крышку, потолочины/полки, утеплительную подушку и все оборудование улья кроме рамок. После замера backend сохранит вес как тару пустого улья.";
+    return <p className="command-note">{text}</p>;
+  }
+  if (step === "measure") {
+    return (
+      <div className="command-result">
+        <strong>{measuredWeight === null ? "Ожидаем результат замера от устройства" : `${measuredWeight.toFixed(2).replace(".", ",")} кг`}</strong>
+        <span>{measuredWeight === null ? "Нужен firmware ack/result для команды capture_weight. После него кнопка сохранения станет активной." : "Следующий backend-инкремент сохранит это значение в scale_profile и будет вычитать его из сырого веса."}</span>
+      </div>
+    );
+  }
+  return <p className="command-note">После сохранения можно отпустить устройство в сон или начать мастер заново.</p>;
+}
+
+function latestWakeTime(device: Device | null) {
+  if (!device) return null;
+  const values = [device.last_status_at, device.last_telemetry_at]
+    .filter(Boolean)
+    .map((value) => new Date(value as string))
+    .filter((value) => Number.isFinite(value.getTime()))
+    .sort((a, b) => b.getTime() - a.getTime());
+  return values[0] ?? null;
+}
+
+function commandPayload(action: DeviceCommandAction) {
+  void action;
+  return {};
+}
+
+function weightFromCommand(command: DeviceCommand | void) {
+  const result = command?.result;
+  if (!result || typeof result !== "object") return null;
+  const value = result.weight_kg ?? result.weight ?? result.raw_weight_kg;
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function commandLabel(command: string) {
+  switch (command) {
+  case "reboot":
+  case "restart":
+    return "Reboot";
+  case "firmware_update":
+    return "Обновление прошивки";
+  case "clear_buffer":
+    return "Очистить буфер";
+  case "config_update":
+    return "Конфигурирование";
+  case "hold_config_session":
+    return "Удерживать устройство";
+  case "capture_weight":
+    return "Замерить вес";
+  case "finish_config_session":
+    return "Завершить сеанс";
+  default:
+    return command;
+  }
+}
+
+function commandStatusText(command: DeviceCommand) {
+  const time = formatDate(command.updated_at);
+  switch (command.status) {
+  case "created":
+    return `создана ${time}`;
+  case "published":
+    return `отправлена ${time}`;
+  case "acknowledged":
+    return `подтверждена ${formatDate(command.acknowledged_at || command.updated_at)}`;
+  case "failed":
+    return `ошибка ${time}`;
+  case "expired":
+    return `истекла ${time}`;
+  default:
+    return `${command.status} ${time}`;
+  }
 }
 
 function DetailTabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {

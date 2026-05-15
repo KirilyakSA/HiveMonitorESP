@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/KirilyakSA/HiveMonitorESP/backend/internal/api"
+	"github.com/KirilyakSA/HiveMonitorESP/backend/internal/commands"
 	"github.com/KirilyakSA/HiveMonitorESP/backend/internal/config"
 	"github.com/KirilyakSA/HiveMonitorESP/backend/internal/database"
 	"github.com/KirilyakSA/HiveMonitorESP/backend/internal/events"
@@ -40,7 +41,13 @@ func main() {
 	}
 
 	repo := repository.New(db)
-	server := api.NewServer(cfg, repo, bus, logger)
+	commandPublisher := commands.NewPublisher(cfg, logger)
+	if err := commandPublisher.Connect(); err != nil {
+		logger.Warn("mqtt command publisher disabled", "error", err)
+	} else {
+		defer commandPublisher.Close()
+	}
+	server := api.NewServer(cfg, repo, bus, logger, commandPublisher)
 
 	httpServer := &http.Server{
 		Addr:              cfg.HTTPAddr,

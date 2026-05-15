@@ -14,16 +14,18 @@ EN: Goal - allow web/mobile clients to send device commands through the backend.
 
 Нужно сделать / Required work:
 
-- RU: таблицу `device_commands` или эквивалентный command journal.
-  EN: add a `device_commands` table or an equivalent command journal.
-- RU: HTTP API для создания команды к устройству.
-  EN: add an HTTP API to create a command for a device.
-- RU: публикацию MQTT command topic: `apiaries/{apiaryId}/devices/{deviceId}/commands`; legacy fallback `hives/{deviceId}/commands`.
-  EN: publish MQTT command topics: `apiaries/{apiaryId}/devices/{deviceId}/commands`; legacy fallback `hives/{deviceId}/commands`.
-- RU: статусы команды: created, published, acknowledged, failed, expired.
-  EN: command statuses: created, published, acknowledged, failed, expired.
+- RU: DONE MVP - таблица `device_commands` и command journal.
+  EN: DONE MVP - `device_commands` table and command journal.
+- RU: DONE MVP - HTTP API создания и просмотра команд устройства.
+  EN: DONE MVP - HTTP API to create and list device commands.
+- RU: DONE MVP - публикация MQTT command topic: `apiaries/{apiaryId}/devices/{deviceId}/commands`; legacy fallback `hives/{deviceId}/commands`.
+  EN: DONE MVP - MQTT command topic publishing: `apiaries/{apiaryId}/devices/{deviceId}/commands`; legacy fallback `hives/{deviceId}/commands`.
+- RU: DONE MVP - статусы команды: created, published, failed; статусы acknowledged/expired заложены в модель.
+  EN: DONE MVP - command statuses: created, published, failed; acknowledged/expired are modeled.
 - RU: сохранение результата/ack от firmware, когда firmware начнет его публиковать.
   EN: store firmware result/ack once firmware starts publishing it.
+- RU: firmware должна перед deep sleep проверять входящие backend-команды `reboot`, `firmware_update`, `config_update`, `hold_config_session`, `capture_weight`, `finish_config_session`; firmware tare/calibration весов выполняются в локальном web-интерфейсе устройства.
+  EN: firmware must check incoming backend commands `reboot`, `firmware_update`, `config_update`, `hold_config_session`, `capture_weight`, `finish_config_session` before deep sleep; firmware scale tare/calibration are performed in the local device web UI.
 
 ### 2. Alerts по пропущенным передачам / Alerts for Missed Transmissions - [#19](https://github.com/KirilyakSA/HiveMonitorESP/issues/19)
 
@@ -65,9 +67,30 @@ RU: Deploy-часть описана в deploy backlog.
 
 EN: The deploy part is described in the deploy backlog.
 
+### 4. Safe deletion hardening / Усиление безопасного удаления - [#46](https://github.com/KirilyakSA/HiveMonitorESP/issues/46)
+
+RU: MVP hard-delete endpoints и web UI для удаления устройств, ульев и пасек реализованы. Оставшаяся цель - усилить production-безопасность удаления.
+
+EN: MVP hard-delete endpoints and web UI for deleting devices, hives and apiaries are implemented. Remaining goal - harden deletion safety for production.
+
+Нужно сделать / Required work:
+
+- RU: добавить soft-delete/archive policy вместо hard-delete для production.
+  EN: add a soft-delete/archive policy instead of hard-delete for production.
+- RU: определить policy `soft_delete`/`archive` для production и `hard_delete` для test/dev или явного подтверждения.
+  EN: define `soft_delete`/`archive` policy for production and `hard_delete` for test/dev or explicit confirmation.
+- RU: при удалении улья явно выбирать, что делать с telemetry history, events и device assignments.
+  EN: when deleting a hive, explicitly choose what happens to telemetry history, events and device assignments.
+- RU: при удалении устройства явно выбирать, что делать с historical readings и активными привязками.
+  EN: when deleting a device, explicitly choose what happens to historical readings and active assignments.
+- RU: при удалении пасеки требовать подтверждение имени пасеки или confirmation token.
+  EN: when deleting an apiary, require apiary name confirmation or a confirmation token.
+- RU: добавить audit trail для удаления и восстановления.
+  EN: add deletion and restore audit trail.
+
 ## P1
 
-### 4. Журнал осмотров семьи / Hive Inspection Medical Record - [#29](https://github.com/KirilyakSA/HiveMonitorESP/issues/29)
+### 5. Журнал осмотров семьи / Hive Inspection Medical Record - [#29](https://github.com/KirilyakSA/HiveMonitorESP/issues/29)
 
 RU: Цель - развить журнал событий в полноценную историю улья/пчелосемьи, где осмотры становятся “медицинской картой семьи”, а не просто набором технических событий.
 
@@ -88,7 +111,7 @@ EN: Goal - evolve the event journal into a full hive/colony history where inspec
 - RU: CRUD API и endpoint истории семьи для web/mobile.
   EN: CRUD API and colony history endpoint for web/mobile.
 
-### 5. Alert rules и системные теги / Alert Rules and System Tags
+### 6. Alert rules и системные теги / Alert Rules and System Tags
 
 RU: Цель - превратить сырую телеметрию в понятные признаки внимания.
 
@@ -105,7 +128,7 @@ EN: Goal - transform raw telemetry into actionable attention signals.
 - RU: журнал решений alert engine.
   EN: alert engine decision journal.
 
-### 6. Tasks, recurring tasks, reminders / Задачи, повторяющиеся задачи и напоминания
+### 7. Tasks, recurring tasks, reminders / Задачи, повторяющиеся задачи и напоминания
 
 RU: Цель - планировщик работ по пасеке и ульям.
 
@@ -126,7 +149,7 @@ EN: Goal - work planner for apiaries and hives.
 - RU: reminder events для будущих push/Telegram/in-app каналов.
   EN: reminder events for future push/Telegram/in-app channels.
 
-### 7. Weather providers, weather stations and telemetry context / Погодные провайдеры, метеостанции и контекст телеметрии - [#30](https://github.com/KirilyakSA/HiveMonitorESP/issues/30)
+### 8. Weather providers, weather stations and telemetry context / Погодные провайдеры, метеостанции и контекст телеметрии - [#30](https://github.com/KirilyakSA/HiveMonitorESP/issues/30)
 
 RU: Цель - погодный контекст для анализа ульев, где погода используется не как “красивая погода”, а как аналитический слой для интерпретации веса, температуры улья и поведения семей.
 
@@ -153,7 +176,7 @@ EN: Goal - weather context for hive analysis, where weather is not a decorative 
 - RU: поддержку аналитики по слоям: вес улья, температура улья, внешняя температура, дождь, ветер, влажность, давление.
   EN: layered analytics support: hive weight, hive temperature, outside temperature, rain, wind, humidity and pressure.
 
-### 8. Scale calibration and hive/super tare workflow / Калибровка весов и тарирование улья/магазина - [#45](https://github.com/KirilyakSA/HiveMonitorESP/issues/45)
+### 9. Scale calibration and hive/super tare workflow / Калибровка весов и тарирование улья/магазина - [#45](https://github.com/KirilyakSA/HiveMonitorESP/issues/45)
 
 RU: Цель - сделать весовые данные интерпретируемыми: отделить калибровку датчика от тарирования пустого улья, семьи с рамками и магазинов.
 
@@ -163,12 +186,20 @@ EN: Goal - make weight data interpretable by separating sensor calibration from 
 
 - RU: модели/таблицы для истории калибровок, истории тарирования и активного `scale_profile` улья/устройства.
   EN: models/tables for calibration history, tare history and active hive/device `scale_profile`.
-- RU: backend command/API для `calibrate_scale`, `tare_empty_hive`, `tare_super`.
-  EN: backend command/API for `calibrate_scale`, `tare_empty_hive`, `tare_super`.
+- RU: firmware tare и калибровка весов через локальный web-интерфейс устройства: firmware tare сбрасывает собственные весы в ноль, calibration flow использует веса 1 кг, 100 г и 10 г.
+  EN: firmware tare and scale calibration through the local device web UI: firmware tare zeros the device scale itself, calibration flow uses 1 kg, 100 g and 10 g weights.
+- RU: backend tare API для улья и магазинов не отправляет значение тары в устройство: тара сохраняется как параметр улья/магазина и используется в расчетах API/UI.
+  EN: backend tare API for hive and supers does not send tare values to the device: tare is stored as a hive/super parameter and used in API/UI calculations.
+- RU: backend tare wizard использует устройство только для одноразового raw weight: `hold_config_session` -> подготовка улья/магазина -> `capture_weight` -> backend save tare -> `finish_config_session`.
+  EN: backend tare wizard uses the device only for one-off raw weight: `hold_config_session` -> prepare hive/super -> `capture_weight` -> backend save tare -> `finish_config_session`.
 - RU: после калибровки поддержать тарирование пустого улья без рамок, но с крышкой; сохранить этот вес как нулевое/стартовое значение улья.
   EN: after calibration, support taring an empty hive without frames but with cover; store this as the hive zero/baseline value.
 - RU: при установке магазина поддержать второе тарирование: улей с семьей и рамками + пустой магазин без рамок; сохранить вес семьи с рамками и базовый вес пустого магазина.
   EN: when adding a super, support a second tare: hive with colony and frames + empty super without frames; store colony-with-frames weight and empty-super baseline.
+- RU: поддержать несколько тар магазина 2/3/4..., а при снятии магазина сбрасывать соответствующую тару и возвращать нулевой уровень к предыдущей активной таре.
+  EN: support multiple super tares 2/3/4..., and when a super is removed reset that tare and return the zero level to the previous active tare.
+- RU: при сохранении backend-тары пустого улья сбрасывать отображаемый вес улья в ноль и рассчитывать дальнейшие изменения относительно сохраненной тары.
+  EN: when saving backend empty-hive tare, reset displayed hive weight to zero and calculate future changes relative to the saved tare.
 - RU: хранить пользователя, источник операции (`local_device`, `backend_command`), время, результат, параметры и комментарий.
   EN: store user, operation source (`local_device`, `backend_command`), time, result, parameters and comment.
 - RU: связать результат firmware ack/status с command journal.
@@ -178,7 +209,7 @@ EN: Goal - make weight data interpretable by separating sensor calibration from 
 - RU: использовать активный профиль веса в аналитике: общий вес, прирост меда, вес семьи, вклад магазинов.
   EN: use active weight profile in analytics: gross weight, honey gain, colony weight and super contribution.
 
-### 9. Roles and permissions / Роли и права доступа
+### 10. Roles and permissions / Роли и права доступа
 
 RU: Цель - подготовить SaaS-модель с организациями, пасеками и командами.
 
@@ -197,7 +228,7 @@ EN: Goal - prepare a SaaS model with organizations, apiaries and teams.
 - RU: тесты на доступ к apiary/hive/device/event ресурсам.
   EN: access tests for apiary/hive/device/event resources.
 
-### 10. Карта радиуса лёта и медоносов / Foraging Radius and Honey Plant Map - [#31](https://github.com/KirilyakSA/HiveMonitorESP/issues/31)
+### 11. Карта радиуса лёта и медоносов / Foraging Radius and Honey Plant Map - [#31](https://github.com/KirilyakSA/HiveMonitorESP/issues/31)
 
 RU: Цель - добавить geo-слой пасеки: радиус лёта, медоносы, поля, сады, лесополосы, риски обработок и прогноз медосбора.
 
@@ -220,7 +251,7 @@ EN: Goal - add an apiary geo layer: foraging radius, honey plants, fields, orcha
 - RU: основу прогноза медосбора по медоносам, погоде и динамике веса.
   EN: foundation for honey flow forecast based on honey plants, weather and weight dynamics.
 
-### 11. Режим кочевой пасеки / Migratory Apiary Mode - [#32](https://github.com/KirilyakSA/HiveMonitorESP/issues/32)
+### 12. Режим кочевой пасеки / Migratory Apiary Mode - [#32](https://github.com/KirilyakSA/HiveMonitorESP/issues/32)
 
 RU: Цель - поддержать профессиональных пасечников, которые перевозят партии ульев между стоянками под конкретные медоносы и культуры.
 
@@ -241,7 +272,7 @@ EN: Goal - support professional beekeepers who move hive batches between stands 
 - RU: отчет по результату медосбора: период, динамика веса, погода, фактический результат.
   EN: honey flow result report: period, weight dynamics, weather and actual result.
 
-### 12. Паспорт пасеки/партии меда и QR / Apiary or Honey Batch Passport and QR - [#33](https://github.com/KirilyakSA/HiveMonitorESP/issues/33)
+### 13. Паспорт пасеки/партии меда и QR / Apiary or Honey Batch Passport and QR - [#33](https://github.com/KirilyakSA/HiveMonitorESP/issues/33)
 
 RU: Цель - отчеты для продажи меда и доверия покупателей: публичная история партии меда без раскрытия точных координат и приватных данных.
 
@@ -264,7 +295,7 @@ EN: Goal - honey sales and buyer trust reports: a public honey batch story witho
 - RU: будущий PDF/HTML export.
   EN: future PDF/HTML export.
 
-### 13. Карточка проблемных ульев сегодня / Problem Hives Today Card - [#34](https://github.com/KirilyakSA/HiveMonitorESP/issues/34)
+### 14. Карточка проблемных ульев сегодня / Problem Hives Today Card - [#34](https://github.com/KirilyakSA/HiveMonitorESP/issues/34)
 
 RU: Цель - дать пасечнику быстрый ежедневный список ульев, которые сегодня требуют внимания, с понятной причиной.
 
@@ -281,7 +312,7 @@ EN: Goal - give the beekeeper a fast daily list of hives requiring attention tod
 - RU: поддержать действие “скрыть на сегодня”.
   EN: support “hide for today”.
 
-### 14. Календарь работ по сезонам / Seasonal Work Calendar - [#35](https://github.com/KirilyakSA/HiveMonitorESP/issues/35)
+### 15. Календарь работ по сезонам / Seasonal Work Calendar - [#35](https://github.com/KirilyakSA/HiveMonitorESP/issues/35)
 
 RU: Цель - развить текущий календарь работ в полноценную сезонную картину пасеки: текущие, будущие и просроченные работы по периодам пасечного года.
 
@@ -302,7 +333,7 @@ EN: Goal - evolve the current work calendar into a full seasonal apiary view: cu
 - RU: выполнение, откладывание, скрытие, комментарий и результат работы.
   EN: complete, snooze, dismiss, comment and work result.
 
-### 15. Ручные события, комментарии и фото / Manual Events, Comments and Photos - [#36](https://github.com/KirilyakSA/HiveMonitorESP/issues/36)
+### 16. Ручные события, комментарии и фото / Manual Events, Comments and Photos - [#36](https://github.com/KirilyakSA/HiveMonitorESP/issues/36)
 
 RU: Цель - дать пасечнику возможность вручную фиксировать наблюдения, комментарии, результаты работ и фото в истории пасеки/улья.
 
@@ -323,7 +354,7 @@ EN: Goal - allow beekeepers to manually record observations, comments, work resu
 - RU: file storage abstraction, permissions и audit автора.
   EN: file storage abstraction, permissions and author audit.
 
-### 16. Схема расположения ульев / Apiary Hive Layout Map - [#37](https://github.com/KirilyakSA/HiveMonitorESP/issues/37)
+### 17. Схема расположения ульев / Apiary Hive Layout Map - [#37](https://github.com/KirilyakSA/HiveMonitorESP/issues/37)
 
 RU: Цель - хранить и показывать абстрактную схему расположения ульев на пасеке без GPS-координат каждого улья.
 
@@ -342,7 +373,7 @@ EN: Goal - store and display an abstract apiary hive layout without GPS coordina
 - RU: статусы, алармы, теги и задачи как визуальные слои на схеме.
   EN: statuses, alerts, tags and tasks as visual layers on the layout.
 
-### 17. Weather analytics / Погодная аналитика - [#38](https://github.com/KirilyakSA/HiveMonitorESP/issues/38)
+### 18. Weather analytics / Погодная аналитика - [#38](https://github.com/KirilyakSA/HiveMonitorESP/issues/38)
 
 RU: Цель - превратить погодный контекст в аналитический слой, который объясняет телеметрию ульев.
 
@@ -359,7 +390,7 @@ EN: Goal - turn weather context into an analytics layer that explains hive telem
 - RU: погодные слои на графиках и агрегаты для отчетов.
   EN: weather layers on charts and aggregates for reports.
 
-### 18. Прогноз медосбора / Honey Flow Forecast - [#39](https://github.com/KirilyakSA/HiveMonitorESP/issues/39)
+### 19. Прогноз медосбора / Honey Flow Forecast - [#39](https://github.com/KirilyakSA/HiveMonitorESP/issues/39)
 
 RU: Цель - прогнозировать потенциал медосбора по медоносам, цветению, погоде и динамике веса ульев.
 
@@ -376,7 +407,7 @@ EN: Goal - forecast honey flow potential using honey plants, bloom periods, weat
 - RU: показывать прогноз ожидаемого взятка, изменения потенциала и завершения активного периода.
   EN: show forecast for expected flow, potential changes and active period ending.
 
-### 19. Антироевые подсказки / Anti-Swarming Recommendations - [#40](https://github.com/KirilyakSA/HiveMonitorESP/issues/40)
+### 20. Антироевые подсказки / Anti-Swarming Recommendations - [#40](https://github.com/KirilyakSA/HiveMonitorESP/issues/40)
 
 RU: Цель - помогать пасечнику замечать риск роения и планировать безопасные действия-подсказки без жесткого автопилота.
 
@@ -393,7 +424,7 @@ EN: Goal - help the beekeeper notice swarming risk and plan safe recommendation-
 - RU: связь подсказки с календарной задачей.
   EN: link recommendation with a calendar task.
 
-### 20. Защита от кражи, GPS и наклон / Theft, GPS and Tilt Monitoring - [#41](https://github.com/KirilyakSA/HiveMonitorESP/issues/41)
+### 21. Защита от кражи, GPS и наклон / Theft, GPS and Tilt Monitoring - [#41](https://github.com/KirilyakSA/HiveMonitorESP/issues/41)
 
 RU: Цель - защитить удаленные пасеки от кражи и вандализма. Первый MVP должен использовать уже доступные сигналы: вес, датчик открытия, RSSI, батарея и missed telemetry. GPS/tilt/удар датчики остаются следующим расширением.
 
@@ -422,7 +453,7 @@ EN: Goal - protect remote apiaries from theft and vandalism. The first MVP shoul
 - RU: настройки чувствительности и режим охраны.
   EN: sensitivity settings and armed mode.
 
-### 21. Анализ звука ульев / Hive Audio Analysis - [#42](https://github.com/KirilyakSA/HiveMonitorESP/issues/42)
+### 22. Анализ звука ульев / Hive Audio Analysis - [#42](https://github.com/KirilyakSA/HiveMonitorESP/issues/42)
 
 RU: Цель - добавить audio analysis как будущую premium/AI-функцию.
 
@@ -441,7 +472,7 @@ EN: Goal - add audio analysis as a future premium/AI feature.
 - RU: показывать объяснимые подсказки и уверенность модели без жестких диагнозов.
   EN: show explainable recommendations and model confidence without hard diagnoses.
 
-### 22. Анализ изображений рамок / Frame Image Analysis - [#43](https://github.com/KirilyakSA/HiveMonitorESP/issues/43)
+### 23. Анализ изображений рамок / Frame Image Analysis - [#43](https://github.com/KirilyakSA/HiveMonitorESP/issues/43)
 
 RU: Цель - добавить image analysis рамок как AI-функцию, связанную с журналом осмотров.
 
@@ -460,7 +491,7 @@ EN: Goal - add frame image analysis as an AI feature linked to the inspection jo
 - RU: связь с журналом осмотров и рекомендациями.
   EN: link to inspection journal and recommendations.
 
-### 23. AI-помощник пасечника / Beekeeper AI Assistant - [#44](https://github.com/KirilyakSA/HiveMonitorESP/issues/44)
+### 24. AI-помощник пасечника / Beekeeper AI Assistant - [#44](https://github.com/KirilyakSA/HiveMonitorESP/issues/44)
 
 RU: Цель - premium AI-помощник, который объясняет данные и помогает планировать работы.
 

@@ -111,6 +111,32 @@ type DeviceEvent struct {
 	RawPayloadID *string   `json:"raw_payload_id,omitempty"`
 }
 
+type DeviceCommand struct {
+	ID              string          `json:"id"`
+	APIaryID        string          `json:"apiary_id"`
+	DeviceID        string          `json:"device_id"`
+	DevicePublicID  string          `json:"device_public_id"`
+	RequestedBy     *string         `json:"requested_by,omitempty"`
+	Command         string          `json:"command"`
+	Payload         json.RawMessage `json:"payload"`
+	Status          string          `json:"status"`
+	MQTTTopic       string          `json:"mqtt_topic"`
+	PublishedTopics []string        `json:"published_topics"`
+	ErrorMessage    string          `json:"error_message"`
+	Result          json.RawMessage `json:"result,omitempty"`
+	CreatedAt       time.Time       `json:"created_at"`
+	PublishedAt     *time.Time      `json:"published_at,omitempty"`
+	AcknowledgedAt  *time.Time      `json:"acknowledged_at,omitempty"`
+	ExpiresAt       time.Time       `json:"expires_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+}
+
+type CreateDeviceCommandInput struct {
+	Command          string          `json:"command"`
+	Payload          json.RawMessage `json:"payload"`
+	ExpiresInSeconds int             `json:"expires_in_seconds"`
+}
+
 type CalendarSettings struct {
 	APIaryID                 string    `json:"apiary_id"`
 	TemplateID               string    `json:"template_id"`

@@ -44,7 +44,9 @@ NATS + JetStream
 - локальную настройку через web-интерфейс;
 - локальный буфер телеметрии в LittleFS;
 - публикацию телеметрии и событий в MQTT;
-- прием MQTT-команд `measure`, `restart`, `tare`, `clearBuffer`, `configUpdate`;
+- прием MQTT-команд `reboot`, `firmware_update`, `config_update`;
+- локальную firmware tare/калибровку весов через web-интерфейс устройства;
+- backend-тару улья/магазинов как параметры улья, которые вычитаются из сырого веса в API/UI;
 - локальное web-обновление прошивки.
 
 Текущая firmware публикует legacy topics:

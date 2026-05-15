@@ -91,6 +91,26 @@ export type DeviceEvent = {
   raw_payload_id?: string;
 };
 
+export type DeviceCommand = {
+  id: string;
+  apiary_id: string;
+  device_id: string;
+  device_public_id: string;
+  requested_by?: string;
+  command: string;
+  payload: Record<string, unknown> | null;
+  status: "created" | "published" | "acknowledged" | "failed" | "expired" | string;
+  mqtt_topic: string;
+  published_topics: string[];
+  error_message: string;
+  result?: Record<string, unknown> | null;
+  created_at: string;
+  published_at?: string;
+  acknowledged_at?: string;
+  expires_at: string;
+  updated_at: string;
+};
+
 export type AdviceItem = {
   id: string;
   code: string;
@@ -187,12 +207,20 @@ export class ApiClient {
     return this.request("/apiaries/", { method: "POST", body: input });
   }
 
+  deleteApiary(apiaryId: string, confirmName: string): Promise<void> {
+    return this.request(`/apiaries/${apiaryId}`, { method: "DELETE", body: { confirm_name: confirmName } });
+  }
+
   hives(apiaryId: string): Promise<Hive[]> {
     return this.request<Hive[] | null>(`/apiaries/${apiaryId}/hives`).then(asArray);
   }
 
   createHive(apiaryId: string, input: Partial<Hive> & { name: string }): Promise<Hive> {
     return this.request(`/apiaries/${apiaryId}/hives`, { method: "POST", body: input });
+  }
+
+  deleteHive(hiveId: string): Promise<void> {
+    return this.request(`/hives/${hiveId}`, { method: "DELETE" });
   }
 
   unassignedDevices(apiaryId: string): Promise<Device[]> {
@@ -203,6 +231,25 @@ export class ApiClient {
     return this.request(`/apiaries/${apiaryId}/devices/${deviceId}/assign`, {
       method: "POST",
       body: { hive_id: hiveId, import_mode: importMode, replace_existing: replaceExisting }
+    });
+  }
+
+  deleteDevice(apiaryId: string, deviceId: string): Promise<void> {
+    return this.request(`/apiaries/${apiaryId}/devices/${deviceId}`, { method: "DELETE" });
+  }
+
+  device(apiaryId: string, deviceId: string): Promise<Device> {
+    return this.request(`/apiaries/${apiaryId}/devices/${deviceId}`);
+  }
+
+  deviceCommands(apiaryId: string, deviceId: string, limit = 20): Promise<DeviceCommand[]> {
+    return this.request<DeviceCommand[] | null>(`/apiaries/${apiaryId}/devices/${deviceId}/commands?limit=${limit}`).then(asArray);
+  }
+
+  createDeviceCommand(apiaryId: string, deviceId: string, command: string, payload: Record<string, unknown> = {}): Promise<DeviceCommand> {
+    return this.request(`/apiaries/${apiaryId}/devices/${deviceId}/commands`, {
+      method: "POST",
+      body: { command, payload }
     });
   }
 

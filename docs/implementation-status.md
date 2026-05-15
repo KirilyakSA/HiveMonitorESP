@@ -92,7 +92,7 @@ EN: After the project review, mismatches were moved to GitHub Issues with the hi
 
 ### Частично совместимо
 
-- Firmware принимает MQTT-команды, но backend MVP пока не имеет command API/service.
+- Backend command API MVP уже создает `device_commands` и публикует MQTT-команды в apiary-aware topic с legacy fallback. Firmware-side ack/result и полноценный command-service остаются следующим инкрементом.
 
 ### Устаревшее в старой документации
 

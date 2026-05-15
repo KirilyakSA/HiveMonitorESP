@@ -115,10 +115,15 @@ POST /organizations/
 
 GET  /apiaries/
 POST /apiaries/
+DELETE /apiaries/{apiaryID}
 GET  /apiaries/{apiaryID}/hives
 POST /apiaries/{apiaryID}/hives
 GET  /apiaries/{apiaryID}/devices/unassigned
+GET  /apiaries/{apiaryID}/devices/{deviceUUID}
+DELETE /apiaries/{apiaryID}/devices/{deviceUUID}
 POST /apiaries/{apiaryID}/devices/{deviceUUID}/assign
+GET  /apiaries/{apiaryID}/devices/{deviceUUID}/commands
+POST /apiaries/{apiaryID}/devices/{deviceUUID}/commands
 GET  /apiaries/{apiaryID}/events
 GET  /apiaries/{apiaryID}/advice
 PATCH /apiaries/{apiaryID}/advice/{adviceCode}
@@ -129,7 +134,29 @@ PATCH /apiaries/{apiaryID}/calendar/tasks/{taskID}
 GET  /hives/{hiveID}/telemetry/latest
 GET  /hives/{hiveID}/telemetry/history
 GET  /hives/{hiveID}/events
+DELETE /hives/{hiveID}
 ```
+
+Device command MVP / MVP команд устройств:
+
+- RU: API создает запись в `device_commands`, публикует MQTT command message и возвращает текущий статус команды.
+  EN: the API creates a `device_commands` record, publishes an MQTT command message and returns the current command status.
+- RU: поддержанные backend-команды устройства: `reboot`, `firmware_update`, `config_update`, `hold_config_session`, `capture_weight`, `finish_config_session`. `restart` временно оставлен как legacy alias.
+  EN: supported backend device commands: `reboot`, `firmware_update`, `config_update`, `hold_config_session`, `capture_weight`, `finish_config_session`. `restart` is temporarily kept as a legacy alias.
+- RU: отдельной команды `measure` в MVP нет: sleeping-устройство при физическом пробуждении само делает замеры, отправляет телеметрию и снова засыпает.
+  EN: there is no separate `measure` command in the MVP: when a sleeping device is physically woken up, it measures, sends telemetry and sleeps again.
+- RU: `reboot`, `firmware_update` и `config_update` ставятся в очередь и выполняются при следующем пробуждении; UI предупреждает пользователя, что при необходимости устройство можно разбудить вручную.
+  EN: `reboot`, `firmware_update` and `config_update` are queued and run on the next wake-up; the UI warns the user that the device can be woken manually if needed.
+- RU: firmware tare и калибровка весов выполняются локально в web-интерфейсе устройства: сначала firmware tare сбрасывает собственные весы в ноль, затем calibration flow просит калибровочные веса 1 кг, 100 г и 10 г.
+  EN: firmware tare and scale calibration are performed locally in the device web UI: firmware tare first zeros the scale itself, then the calibration flow asks for 1 kg, 100 g and 10 g calibration weights.
+- RU: тара улья и тара магазинов не отправляются на устройство. Это backend-параметры улья: backend хранит вес тары и вычитает его из сырого веса устройства для отображения полезного веса в web/mobile.
+  EN: hive tare and super tare are not sent to the device. They are backend hive parameters: the backend stores tare weight and subtracts it from raw device weight to show useful/net weight in web/mobile.
+- RU: для backend-тары устройство все равно участвует в процессе: UI удерживает устройство командой `hold_config_session`, просит подготовить улей/магазин, отправляет `capture_weight` для одноразового сырого замера и закрывает сеанс через `finish_config_session`; сохранение тары происходит только в backend.
+  EN: for backend tare, the device still participates in the process: the UI keeps it awake with `hold_config_session`, asks the user to prepare the hive/super, sends `capture_weight` for a one-off raw measurement and closes the session with `finish_config_session`; tare storage happens only in the backend.
+- RU: публикация идет в `apiaries/{apiaryId}/devices/{deviceId}/commands` и legacy `hives/{deviceId}/commands`.
+  EN: publishing goes to `apiaries/{apiaryId}/devices/{deviceId}/commands` and legacy `hives/{deviceId}/commands`.
+- RU: статусы `acknowledged`, `expired` и сохранение результата firmware заложены в модель и будут включены после firmware ack flow.
+  EN: `acknowledged`, `expired` statuses and firmware result storage are modeled and will be enabled after the firmware ack flow.
 
 ## Календарь работ и советы
 

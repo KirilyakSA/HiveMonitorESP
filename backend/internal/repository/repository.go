@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/KirilyakSA/HiveMonitorESP/backend/internal/domain"
@@ -13,6 +14,7 @@ import (
 )
 
 var ErrNotFound = errors.New("not found")
+var ErrInvalidInput = errors.New("invalid input")
 
 type Repository struct {
 	db *pgxpool.Pool
@@ -185,6 +187,57 @@ func (r *Repository) UserCanAccessApiary(ctx context.Context, userID, apiaryID s
 	return ok, err
 }
 
+func (r *Repository) DeleteApiary(ctx context.Context, userID, apiaryID, confirmName string) error {
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotFound
+	}
+
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var apiaryName string
+	if err := tx.QueryRow(ctx, `select name from apiaries where id = $1`, apiaryID).Scan(&apiaryName); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	if strings.TrimSpace(confirmName) != apiaryName {
+		return fmt.Errorf("%w: apiary name confirmation does not match", ErrInvalidInput)
+	}
+
+	if _, err := tx.Exec(ctx, `delete from raw_payloads where apiary_id = $1`, apiaryID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `delete from sensor_readings where apiary_id = $1`, apiaryID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `delete from device_events where apiary_id = $1`, apiaryID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `delete from device_assignments where apiary_id = $1`, apiaryID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `delete from devices where apiary_id = $1`, apiaryID); err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx, `delete from apiaries where id = $1`, apiaryID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return tx.Commit(ctx)
+}
+
 func scanApiary(row pgx.Row) (*domain.Apiary, error) {
 	var apiary domain.Apiary
 	if err := row.Scan(
@@ -223,6 +276,66 @@ func (r *Repository) CreateHive(ctx context.Context, userID string, input domain
 		input.BeeBreed, input.SettledAt, input.QueenYear, input.QueenBreed, input.QueenStatus,
 		input.Status, input.Notes)
 	return scanHive(row)
+}
+
+func (r *Repository) DeleteHive(ctx context.Context, userID, hiveID string) error {
+	var apiaryID string
+	if err := r.db.QueryRow(ctx, `select apiary_id from hives where id = $1`, hiveID).Scan(&apiaryID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotFound
+	}
+
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `delete from sensor_readings where hive_id = $1`, hiveID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `delete from device_events where hive_id = $1`, hiveID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		with closed as (
+			update device_assignments
+			set unassigned_at = now()
+			where hive_id = $1 and unassigned_at is null
+			returning device_id
+		)
+		update devices d
+		set status = 'unassigned'
+		from closed
+		where d.id = closed.device_id
+			and not exists (
+				select 1
+				from device_assignments da
+				where da.device_id = d.id and da.unassigned_at is null
+			)
+	`, hiveID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `delete from device_assignments where hive_id = $1`, hiveID); err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx, `delete from hives where id = $1`, hiveID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *Repository) ListHives(ctx context.Context, userID, apiaryID string) ([]domain.Hive, error) {
@@ -304,6 +417,70 @@ func (r *Repository) ListUnassignedDevices(ctx context.Context, userID, apiaryID
 	`, apiaryID)
 }
 
+func (r *Repository) GetDevice(ctx context.Context, userID, apiaryID, deviceUUID string) (*domain.Device, error) {
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	row := r.db.QueryRow(ctx, `
+		select d.id, d.apiary_id, d.device_id, d.device_type, d.status, d.firmware_version,
+			d.config_version, d.last_telemetry_at, d.last_status_at, d.expected_next_telemetry_at,
+			d.missed_telemetry_count, d.telemetry_interval_minutes, d.created_at
+		from devices d
+		where d.id = $1 and d.apiary_id = $2
+	`, deviceUUID, apiaryID)
+	return scanDevice(row)
+}
+
+func (r *Repository) DeleteDevice(ctx context.Context, userID, apiaryID, deviceUUID string) error {
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrNotFound
+	}
+
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var deviceExists bool
+	if err := tx.QueryRow(ctx, `select exists(select 1 from devices where id = $1 and apiary_id = $2)`, deviceUUID, apiaryID).Scan(&deviceExists); err != nil {
+		return err
+	}
+	if !deviceExists {
+		return ErrNotFound
+	}
+
+	if _, err := tx.Exec(ctx, `delete from raw_payloads where device_id = $1`, deviceUUID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `delete from sensor_readings where device_id = $1`, deviceUUID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `delete from device_events where device_id = $1`, deviceUUID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `delete from device_assignments where device_id = $1`, deviceUUID); err != nil {
+		return err
+	}
+	tag, err := tx.Exec(ctx, `delete from devices where id = $1 and apiary_id = $2`, deviceUUID, apiaryID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return tx.Commit(ctx)
+}
+
 func (r *Repository) listDevices(ctx context.Context, where string, args ...any) ([]domain.Device, error) {
 	rows, err := r.db.Query(ctx, `
 		select d.id, d.apiary_id, d.device_id, d.device_type, d.status, d.firmware_version,
@@ -343,6 +520,150 @@ func scanDevice(row pgx.Row) (*domain.Device, error) {
 		return nil, err
 	}
 	return &device, nil
+}
+
+func (r *Repository) CreateDeviceCommand(ctx context.Context, userID, apiaryID, deviceUUID string, input domain.CreateDeviceCommandInput) (*domain.DeviceCommand, error) {
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	payload := input.Payload
+	if len(payload) == 0 {
+		payload = json.RawMessage(`{}`)
+	}
+	expiresIn := input.ExpiresInSeconds
+	if expiresIn <= 0 {
+		expiresIn = 600
+	}
+	if expiresIn > 3600 {
+		expiresIn = 3600
+	}
+
+	row := r.db.QueryRow(ctx, `
+		with target_device as (
+			select id, device_id
+			from devices
+			where id = $3 and apiary_id = $2
+		)
+		insert into device_commands (
+			apiary_id, device_id, device_public_id, requested_by, command, payload, expires_at
+		)
+		select $2, td.id, td.device_id, $1, $4, $5::jsonb, now() + ($6::int * interval '1 second')
+		from target_device td
+		returning id, apiary_id, device_id, device_public_id, requested_by, command, payload,
+			status, mqtt_topic, published_topics, error_message, coalesce(result, 'null'::jsonb),
+			created_at, published_at, acknowledged_at, expires_at, updated_at
+	`, userID, apiaryID, deviceUUID, input.Command, string(payload), expiresIn)
+	command, err := scanDeviceCommand(row)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return command, nil
+}
+
+func (r *Repository) MarkDeviceCommandPublished(ctx context.Context, commandID string, topics []string) (*domain.DeviceCommand, error) {
+	mainTopic := ""
+	if len(topics) > 0 {
+		mainTopic = topics[0]
+	}
+	row := r.db.QueryRow(ctx, `
+		update device_commands
+		set status = 'published',
+			mqtt_topic = $2,
+			published_topics = $3,
+			published_at = now(),
+			updated_at = now()
+		where id = $1
+		returning id, apiary_id, device_id, device_public_id, requested_by, command, payload,
+			status, mqtt_topic, published_topics, error_message, coalesce(result, 'null'::jsonb),
+			created_at, published_at, acknowledged_at, expires_at, updated_at
+	`, commandID, mainTopic, topics)
+	return scanDeviceCommand(row)
+}
+
+func (r *Repository) MarkDeviceCommandFailed(ctx context.Context, commandID string, message string, topics []string) (*domain.DeviceCommand, error) {
+	mainTopic := ""
+	if len(topics) > 0 {
+		mainTopic = topics[0]
+	}
+	row := r.db.QueryRow(ctx, `
+		update device_commands
+		set status = 'failed',
+			mqtt_topic = $2,
+			published_topics = $3,
+			error_message = $4,
+			updated_at = now()
+		where id = $1
+		returning id, apiary_id, device_id, device_public_id, requested_by, command, payload,
+			status, mqtt_topic, published_topics, error_message, coalesce(result, 'null'::jsonb),
+			created_at, published_at, acknowledged_at, expires_at, updated_at
+	`, commandID, mainTopic, topics, message)
+	return scanDeviceCommand(row)
+}
+
+func (r *Repository) ListDeviceCommands(ctx context.Context, userID, apiaryID, deviceUUID string, limit int) ([]domain.DeviceCommand, error) {
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotFound
+	}
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	rows, err := r.db.Query(ctx, `
+		select dc.id, dc.apiary_id, dc.device_id, dc.device_public_id, dc.requested_by,
+			dc.command, dc.payload, dc.status, dc.mqtt_topic, dc.published_topics,
+			dc.error_message, coalesce(dc.result, 'null'::jsonb), dc.created_at,
+			dc.published_at, dc.acknowledged_at, dc.expires_at, dc.updated_at
+		from device_commands dc
+		join devices d on d.id = dc.device_id
+		where dc.apiary_id = $1 and dc.device_id = $2 and d.apiary_id = $1
+		order by dc.created_at desc
+		limit $3
+	`, apiaryID, deviceUUID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []domain.DeviceCommand
+	for rows.Next() {
+		command, err := scanDeviceCommand(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *command)
+	}
+	return result, rows.Err()
+}
+
+func scanDeviceCommand(row pgx.Row) (*domain.DeviceCommand, error) {
+	var command domain.DeviceCommand
+	if err := row.Scan(
+		&command.ID, &command.APIaryID, &command.DeviceID, &command.DevicePublicID,
+		&command.RequestedBy, &command.Command, &command.Payload, &command.Status,
+		&command.MQTTTopic, &command.PublishedTopics, &command.ErrorMessage,
+		&command.Result, &command.CreatedAt, &command.PublishedAt, &command.AcknowledgedAt,
+		&command.ExpiresAt, &command.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if string(command.Result) == "null" {
+		command.Result = nil
+	}
+	return &command, nil
 }
 
 func (r *Repository) AssignDeviceToHive(ctx context.Context, userID, apiaryID, deviceUUID, hiveID, importMode string, replaceExisting bool) (*domain.DeviceAssignment, error) {

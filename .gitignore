@@ -1,2 +1,5 @@
 backend/.env
 deploy/.env
+web/playwright-report/
+web/test-results/
+web/node_modules/.vite-hivemonitor/

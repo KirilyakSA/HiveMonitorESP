@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiClient } from "./api";
-import type { AdviceItem, Apiary, ApiaryTask, Device, DeviceEvent, Hive, Organization, SensorReading, User } from "./api";
+import type { AdviceItem, Apiary, ApiaryTask, Device, DeviceCommand, DeviceEvent, Hive, Organization, SensorReading, User } from "./api";
 import {
   AlertsPanel,
   ApiariesScreen,
@@ -39,6 +39,8 @@ export function App() {
   const [hives, setHives] = useState<Hive[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [apiaryEvents, setApiaryEvents] = useState<DeviceEvent[]>([]);
+  const [deviceCommands, setDeviceCommands] = useState<DeviceCommand[]>([]);
+  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [apiaryAdvice, setApiaryAdvice] = useState<AdviceItem[]>([]);
   const [apiaryTasks, setApiaryTasks] = useState<ApiaryTask[]>([]);
   const [includeHiddenAdvice, setIncludeHiddenAdvice] = useState(false);
@@ -110,6 +112,7 @@ export function App() {
       setApiaryTasks([]);
       setHiveSnapshots({});
       setHiveHistories({});
+      setDeviceCommands([]);
       return;
     }
     void loadApiaryData(selectedApiaryId, comparisonPeriod);
@@ -120,6 +123,21 @@ export function App() {
       setSelectedHiveId("");
     }
   }, [hives, selectedHiveId]);
+
+  useEffect(() => {
+    setDeviceCommands([]);
+    setSelectedDevice(null);
+    if (!selectedApiaryId || !selectedHive?.assigned_device_id) return;
+    void Promise.all([
+      client.deviceCommands(selectedApiaryId, selectedHive.assigned_device_id),
+      client.device(selectedApiaryId, selectedHive.assigned_device_id)
+    ])
+      .then(([commands, device]) => {
+        setDeviceCommands(commands);
+        setSelectedDevice(device);
+      })
+      .catch((error) => setMessage(error instanceof Error ? error.message : "Не удалось загрузить команды устройства"));
+  }, [client, selectedApiaryId, selectedHive?.assigned_device_id]);
 
   useEffect(() => {
     if (!selectedHiveId) {
@@ -267,6 +285,60 @@ export function App() {
     return apiary;
   }
 
+  async function deleteApiary(apiary: Apiary) {
+    if (!window.confirm(`Удалить пасеку "${apiary.name}"? Это удалит ее ульи, устройства и историю.`)) return;
+    await run("Пасека удалена", async () => {
+      await client.deleteApiary(apiary.id, apiary.name);
+      setSelectedApiaryId((current) => current === apiary.id ? "" : current);
+      setSelectedApiariesScreenId("");
+      setSelectedHiveId("");
+      const next = selectedOrgId ? await client.apiaries(selectedOrgId) : [];
+      setApiaries(next);
+    });
+  }
+
+  async function deleteHive(hive: Hive) {
+    if (!selectedApiaryId) return;
+    if (!window.confirm(`Удалить улей "${hive.name}"? История улья и активные привязки будут удалены.`)) return;
+    await run("Улей удален", async () => {
+      await client.deleteHive(hive.id);
+      setSelectedHiveId("");
+      await loadApiaryData(selectedApiaryId, comparisonPeriod);
+    });
+  }
+
+  async function deleteDevice(deviceId: string) {
+    if (!selectedApiaryId) return;
+    if (!window.confirm("Удалить устройство? История устройства и его привязки будут удалены.")) return;
+    await run("Устройство удалено", async () => {
+      await client.deleteDevice(selectedApiaryId, deviceId);
+      await loadApiaryData(selectedApiaryId, comparisonPeriod);
+    });
+  }
+
+  async function sendDeviceCommand(deviceId: string, command: string, payload: Record<string, unknown> = {}) {
+    if (!selectedApiaryId) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const created = await client.createDeviceCommand(selectedApiaryId, deviceId, command, payload);
+      setDeviceCommands((items) => [created, ...items.filter((item) => item.id !== created.id)].slice(0, 20));
+      setMessage(created.status === "failed" ? `Команда не отправлена: ${created.error_message}` : "Команда отправлена устройству");
+      return created;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось отправить команду устройству");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadDevice(deviceId: string) {
+    if (!selectedApiaryId) throw new Error("Пасека не выбрана");
+    const device = await client.device(selectedApiaryId, deviceId);
+    if (device.id === selectedHive?.assigned_device_id) setSelectedDevice(device);
+    return device;
+  }
+
   async function loadApiarySummaries(items: Apiary[]) {
     try {
       const pairs = await Promise.all(
@@ -341,6 +413,7 @@ export function App() {
                   setSelectedApiaryId(apiaryId);
                   setActiveView("apiary-dashboard");
                 }}
+                onDeleteApiary={deleteApiary}
                 onCreateApiary={(input) => run("Пасека создана", async () => {
                   await createApiary(input);
                 })}
@@ -361,6 +434,7 @@ export function App() {
                       await loadApiaryData(selectedApiaryId);
                       setSelectedHiveId(hiveId);
                     })}
+                    onDelete={deleteDevice}
                   />
                 </div>
                 <div className="lower-dashboard">
@@ -412,7 +486,13 @@ export function App() {
           hive={selectedHive}
           state={hiveState}
           latestByMetric={latestByMetric}
+          commands={deviceCommands}
+          device={selectedDevice}
           onLoadHistory={(period) => selectedHiveId ? loadHiveHistory(selectedHiveId, period) : Promise.resolve()}
+          onDeleteHive={() => deleteHive(selectedHive)}
+          onDeleteDevice={selectedHive.assigned_device_id ? () => deleteDevice(selectedHive.assigned_device_id!) : undefined}
+          onSendCommand={selectedHive.assigned_device_id ? (command, payload) => sendDeviceCommand(selectedHive.assigned_device_id!, command, payload) : undefined}
+          onLoadDevice={selectedHive.assigned_device_id ? () => loadDevice(selectedHive.assigned_device_id!) : undefined}
           onClose={() => setSelectedHiveId("")}
         />
       )}

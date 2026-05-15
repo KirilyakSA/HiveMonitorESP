@@ -13,8 +13,8 @@ EN: This document captures the nearest project backlog. GitHub Issues remain the
    - RU: сделать нормальный UX привязки устройства к улью с выбором улья и режима исторических данных.
    - EN: build proper device-to-hive assignment UX with hive selection and historical data mode.
 3. Backend: [#18](https://github.com/KirilyakSA/HiveMonitorESP/issues/18)
-   - RU: command API для текущей firmware.
-   - EN: implement the command API for the current firmware.
+   - RU: command API для текущей firmware: `reboot`, `config_update`, `firmware_update` как deferred commands. Firmware tare/calibration выполняются локально на устройстве.
+   - EN: command API for the current firmware: `reboot`, `config_update`, `firmware_update` as deferred commands. Firmware tare/calibration are performed locally on the device.
 4. Backend: [#19](https://github.com/KirilyakSA/HiveMonitorESP/issues/19)
    - RU: alerts по пропущенным плановым передачам.
    - EN: alerts for missed scheduled telemetry transmissions.
@@ -24,6 +24,9 @@ EN: This document captures the nearest project backlog. GitHub Issues remain the
 6. Deploy: [#23](https://github.com/KirilyakSA/HiveMonitorESP/issues/23)
    - RU: backup/restore PostgreSQL.
    - EN: PostgreSQL backup/restore procedure.
+7. Backend/Web: [#46](https://github.com/KirilyakSA/HiveMonitorESP/issues/46)
+   - RU: усилить безопасное удаление: soft-delete/archive policy, audit trail и подробный выбор сохранения истории.
+   - EN: harden safe deletion: soft-delete/archive policy, audit trail and detailed history retention choices.
 
 ## Реализовано и закрыто / Implemented and Closed
 
@@ -75,6 +78,9 @@ EN: This document captures the nearest project backlog. GitHub Issues remain the
 - Web/Backend: [#37](https://github.com/KirilyakSA/HiveMonitorESP/issues/37)
   - RU: схема расположения ульев на пасеке: абстрактные координаты, ряд/колонка/сетка/периметр/freeform и drag-and-drop.
   - EN: apiary hive layout map: abstract coordinates, row/column/grid/perimeter/freeform and drag-and-drop.
+- Backend/Web: [#46](https://github.com/KirilyakSA/HiveMonitorESP/issues/46)
+  - RU: production hardening для удаления устройства, улья и пасеки: soft-delete/archive, audit trail, restore flow и подробные режимы сохранения истории.
+  - EN: production hardening for deleting device, hive and apiary: soft-delete/archive, audit trail, restore flow and detailed history retention modes.
 - Analytics/Backend/Web: [#38](https://github.com/KirilyakSA/HiveMonitorESP/issues/38)
   - RU: weather analytics: корреляция веса с дождем, ветром, температурой, влажностью и давлением, объяснения отклонений.
   - EN: weather analytics: correlate weight with rain, wind, temperature, humidity and pressure, explain anomalies.
@@ -90,6 +96,12 @@ EN: This document captures the nearest project backlog. GitHub Issues remain the
 - Firmware/Backend/Web: [#45](https://github.com/KirilyakSA/HiveMonitorESP/issues/45)
   - RU: workflow калибровки весов и тарирования улья/магазина: локально и через backend, сохранение базового веса пустого улья, веса семьи с рамками, пустого магазина и истории операций.
   - EN: scale calibration and hive/super tare workflow: local and backend-driven, store empty-hive baseline, colony-with-frames weight, empty-super baseline and operation history.
+- Firmware/Backend/Web:
+  - RU: четко разделить firmware tare/calibration и backend hive/super tare: firmware tare/калибровка делаются в web UI устройства, backend-тара улья/магазинов хранится в базе и вычитается из сырого веса.
+  - EN: clearly separate firmware tare/calibration and backend hive/super tare: firmware tare/calibration are done in the device web UI, backend hive/super tare is stored in DB and subtracted from raw weight.
+- Backend/Web:
+  - RU: `scale_profile` и история тарирования: тара пустого улья сбрасывает отображаемый вес в ноль; тары магазинов 2/3/4... добавляются/снимаются слоями с возвратом к предыдущей активной таре.
+  - EN: `scale_profile` and tare history: empty-hive tare resets displayed weight to zero; super tares 2/3/4... are added/removed in layers with fallback to the previous active tare.
 - AI/Backend/Web/Mobile: [#42](https://github.com/KirilyakSA/HiveMonitorESP/issues/42)
   - RU: анализ звука ульев: аудио-признаки, паттерны, аномалии и объяснимые подсказки.
   - EN: hive audio analysis: audio features, patterns, anomalies and explainable recommendations.

@@ -26,7 +26,9 @@
 - HX711, DHT11/DHT21/DHT22, датчик Холла, батарея.
 - JSON-телеметрия в legacy или apiary-aware MQTT topics.
 - События и статусы в legacy или apiary-aware MQTT topics.
-- MQTT-команды `measure`, `restart`, `tare`, `clearBuffer`, `configUpdate`.
+- MQTT-команды backend: `reboot`, `firmware_update`, `config_update`.
+- Firmware tare и калибровка весов выполняются локально в web-интерфейсе устройства.
+- Backend-тара улья/магазинов является параметром улья и вычитается из сырого веса в API/UI.
 - Буферизация телеметрии в LittleFS.
 - Локальное web-обновление прошивки.
 - Factory reset кнопкой.
@@ -101,8 +103,8 @@ Web: login/register, create organization/apiary/hive, assign device, view teleme
 
 - Legacy mode `hives/{deviceId}/...` остается только для совместимости и dev/MVP.
 - Для production provisioning нужно задавать `apiaryId` в локальной конфигурации firmware и использовать topics `apiaries/{apiary_id}/devices/{device_id}/...`.
-- Backend пока не отправляет MQTT-команды устройствам, хотя firmware их принимает.
-- Web пока не отправляет команды устройствам, потому что backend command API еще не реализован.
+- Backend отправляет MQTT-команды устройствам через `device_commands`; firmware ack/result flow еще не реализован.
+- Web отправляет базовые команды обслуживания. Backend workflow тары улья/магазинов еще не реализован.
 - Alerts, системные теги, события от alerts и уведомления еще не реализованы.
 - Проверка пропущенных передач еще не реализована.
 - Tasks/reminders еще не реализованы.
