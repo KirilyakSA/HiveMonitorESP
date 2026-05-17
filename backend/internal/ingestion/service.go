@@ -178,18 +178,21 @@ type telemetryPayload struct {
 }
 
 type deviceMessagePayload struct {
-	SchemaVersion        int    `json:"schemaVersion"`
-	APIaryID             string `json:"apiaryId"`
-	DeviceID             string `json:"deviceId"`
-	Timestamp            string `json:"timestamp"`
-	FirmwareVersion      string `json:"firmwareVersion"`
-	FirmwareVersionSnake string `json:"firmware_version"`
-	ConfigVersion        *int   `json:"configVersion"`
-	Type                 string `json:"type"`
-	EventType            string `json:"eventType"`
-	Message              string `json:"message"`
-	OK                   *bool  `json:"ok"`
-	Command              string `json:"command"`
+	SchemaVersion        int             `json:"schemaVersion"`
+	APIaryID             string          `json:"apiaryId"`
+	DeviceID             string          `json:"deviceId"`
+	Timestamp            string          `json:"timestamp"`
+	FirmwareVersion      string          `json:"firmwareVersion"`
+	FirmwareVersionSnake string          `json:"firmware_version"`
+	ConfigVersion        *int            `json:"configVersion"`
+	Type                 string          `json:"type"`
+	EventType            string          `json:"eventType"`
+	Message              string          `json:"message"`
+	OK                   *bool           `json:"ok"`
+	Command              string          `json:"command"`
+	CommandID            string          `json:"commandId"`
+	CommandIDSnake       string          `json:"command_id"`
+	Result               json.RawMessage `json:"result"`
 }
 
 type readingPayload struct {
@@ -327,6 +330,11 @@ func (s *Service) parseDeviceStatus(topic string, payload []byte) (repository.In
 		DeviceType:      "hive_monitor",
 		FirmwareVersion: firstNonEmpty(parsed.FirmwareVersion, parsed.FirmwareVersionSnake),
 		ConfigVersion:   parsed.ConfigVersion,
+		CommandID:       firstNonEmpty(parsed.CommandID, parsed.CommandIDSnake),
+		Command:         parsed.Command,
+		OK:              parsed.OK,
+		Message:         parsed.Message,
+		Result:          parsed.Result,
 		StatusAt:        statusAt,
 		RawPayload:      json.RawMessage(payload),
 		RawTopic:        topic,

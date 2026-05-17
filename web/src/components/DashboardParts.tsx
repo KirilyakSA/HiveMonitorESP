@@ -39,6 +39,7 @@ import {
   DeviceCommand,
   DeviceEvent,
   Hive,
+  HiveTareEvent,
   Organization,
   SensorReading,
   User
@@ -877,7 +878,7 @@ export function ComparisonPanel({
   );
 }
 
-export function HiveDetail({ hive, state, latestByMetric, commands, device, onLoadHistory, onDeleteHive, onDeleteDevice, onSendCommand, onLoadDevice, onClose }: {
+export function HiveDetail({ hive, state, latestByMetric, commands, device, onLoadHistory, onDeleteHive, onDeleteDevice, onSendCommand, onLoadDevice, onLoadCommands, onSaveTare, onClose }: {
   hive: Hive;
   state: HiveState;
   latestByMetric: Record<string, SensorReading>;
@@ -888,6 +889,15 @@ export function HiveDetail({ hive, state, latestByMetric, commands, device, onLo
   onDeleteDevice?: () => void | Promise<void>;
   onSendCommand?: (command: string, payload?: Record<string, unknown>) => DeviceCommand | void | Promise<DeviceCommand | void>;
   onLoadDevice?: () => Promise<Device>;
+  onLoadCommands?: () => Promise<DeviceCommand[]>;
+  onSaveTare: (input: {
+    tare_kind: "hive" | "super";
+    measured_raw_weight_kg: number;
+    super_index?: number;
+    command_id?: string;
+    comment?: string;
+    metadata?: Record<string, unknown>;
+  }) => Promise<HiveTareEvent>;
   onClose: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>("overview");
@@ -943,7 +953,7 @@ export function HiveDetail({ hive, state, latestByMetric, commands, device, onLo
             <ReadingMini title="Батарея" reading={latestByMetric.battery_percent} />
             <ReadingMini title="RSSI" reading={latestByMetric.rssi} />
           </div>
-          <DeviceCommandPanel commands={commands} device={device} disabled={!onSendCommand || state.loading} onSendCommand={onSendCommand} onLoadDevice={onLoadDevice} />
+          <DeviceCommandPanel commands={commands} device={device} disabled={!onSendCommand || state.loading} onSendCommand={onSendCommand} onLoadDevice={onLoadDevice} onLoadCommands={onLoadCommands} onSaveTare={onSaveTare} />
         </>
       )}
 
@@ -980,13 +990,24 @@ function DeviceCommandPanel({
   device,
   disabled,
   onSendCommand,
-  onLoadDevice
+  onLoadDevice,
+  onLoadCommands,
+  onSaveTare
 }: {
   commands: DeviceCommand[];
   device?: Device | null;
   disabled: boolean;
   onSendCommand?: (command: string, payload?: Record<string, unknown>) => DeviceCommand | void | Promise<DeviceCommand | void>;
   onLoadDevice?: () => Promise<Device>;
+  onLoadCommands?: () => Promise<DeviceCommand[]>;
+  onSaveTare: (input: {
+    tare_kind: "hive" | "super";
+    measured_raw_weight_kg: number;
+    super_index?: number;
+    command_id?: string;
+    comment?: string;
+    metadata?: Record<string, unknown>;
+  }) => Promise<HiveTareEvent>;
 }) {
   const [pendingAction, setPendingAction] = useState<DeviceCommandAction | null>(null);
   const latest = commands[0];
@@ -1037,6 +1058,8 @@ function DeviceCommandPanel({
           onClose={() => setPendingAction(null)}
           onSendCommand={onSendCommand}
           onLoadDevice={onLoadDevice}
+          onLoadCommands={onLoadCommands}
+          onSaveTare={onSaveTare}
         />
       ) : null}
     </section>
@@ -1056,23 +1079,58 @@ function DeviceCommandModal({
   device,
   onClose,
   onSendCommand,
-  onLoadDevice
+  onLoadDevice,
+  onLoadCommands,
+  onSaveTare
 }: {
   action: DeviceCommandAction;
   device?: Device | null;
   onClose: () => void;
   onSendCommand?: (command: string, payload?: Record<string, unknown>) => DeviceCommand | void | Promise<DeviceCommand | void>;
   onLoadDevice?: () => Promise<Device>;
+  onLoadCommands?: () => Promise<DeviceCommand[]>;
+  onSaveTare: (input: {
+    tare_kind: "hive" | "super";
+    measured_raw_weight_kg: number;
+    super_index?: number;
+    command_id?: string;
+    comment?: string;
+    metadata?: Record<string, unknown>;
+  }) => Promise<HiveTareEvent>;
 }) {
   const [openedAt] = useState(() => new Date());
   const [currentDevice, setCurrentDevice] = useState<Device | null>(device ?? null);
   const [step, setStep] = useState<"wake" | "prepare" | "measure" | "save">("wake");
   const [measuredWeight, setMeasuredWeight] = useState<number | null>(null);
+  const [manualWeight, setManualWeight] = useState("");
+  const [captureCommandId, setCaptureCommandId] = useState<string | undefined>();
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const sessionClosed = useRef(false);
   const isTare = action.mode === "tare";
+
+  useEffect(() => {
+    if (!isTare || step !== "measure" || measuredWeight !== null || !captureCommandId || !onLoadCommands) return;
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      void onLoadCommands()
+        .then((items) => {
+          if (cancelled) return;
+          const command = items.find((item) => item.id === captureCommandId);
+          const value = weightFromCommand(command);
+          if (value !== null) {
+            setMeasuredWeight(value);
+            setManualWeight(String(value));
+          }
+        })
+        .catch(() => undefined);
+    }, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [captureCommandId, isTare, measuredWeight, onLoadCommands, step]);
 
   async function refresh() {
     if (!onLoadDevice) return;
@@ -1130,11 +1188,42 @@ function DeviceCommandModal({
       const command = await onSendCommand?.("capture_weight", {
         purpose: action.tareKind === "super" ? "super_tare" : "hive_tare"
       });
+      if (command?.id) setCaptureCommandId(command.id);
       const value = weightFromCommand(command);
-      if (value !== null) setMeasuredWeight(value);
+      if (value !== null) {
+        setMeasuredWeight(value);
+        setManualWeight(String(value));
+      }
       setStep("measure");
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : "Не удалось запросить замер веса");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function saveTare() {
+    const parsed = Number(String(measuredWeight ?? manualWeight).replace(",", "."));
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      setError("Укажите сырой вес больше нуля");
+      return;
+    }
+    setSending(true);
+    setError("");
+    try {
+      await onSaveTare({
+        tare_kind: action.tareKind === "super" ? "super" : "hive",
+        measured_raw_weight_kg: parsed,
+        command_id: captureCommandId,
+        metadata: {
+          source: measuredWeight === null ? "manual_fallback" : "device_command",
+          purpose: action.tareKind === "super" ? "super_tare" : "hive_tare"
+        }
+      });
+      setMeasuredWeight(parsed);
+      setStep("save");
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Не удалось сохранить тару");
     } finally {
       setSending(false);
     }
@@ -1166,7 +1255,7 @@ function DeviceCommandModal({
               <ReadingBox label="Последний status" value={formatDeviceDate(currentDevice?.last_status_at)} />
               <ReadingBox label="Последняя телеметрия" value={formatDeviceDate(currentDevice?.last_telemetry_at)} />
             </div>
-            <TareWizardContent action={action} step={step} measuredWeight={measuredWeight} />
+            <TareWizardContent action={action} step={step} measuredWeight={measuredWeight} manualWeight={manualWeight} onManualWeightChange={setManualWeight} />
             {error ? <div className="notice error">{error}</div> : null}
           </>
         ) : null}
@@ -1176,9 +1265,9 @@ function DeviceCommandModal({
             <>
               {step === "wake" && <button type="button" disabled={!awake} onClick={() => setStep("prepare")}>Далее</button>}
               {step === "prepare" && <button type="button" disabled={!awake || sending} onClick={captureTareWeight}>{sending ? "Запрашиваем..." : "Замерить вес"}</button>}
-              {step === "measure" && <button type="button" disabled={measuredWeight === null} onClick={() => setStep("save")}>Сохранить тару</button>}
+              {step === "measure" && <button type="button" disabled={sending || (!measuredWeight && !manualWeight.trim())} onClick={() => void saveTare()}>{sending ? "Сохраняем..." : "Сохранить тару"}</button>}
               {step === "save" && <button type="button" onClick={() => void finishAndClose()}>Да, отпустить устройство</button>}
-              {step === "save" && <button type="button" className="ghost" onClick={() => { setMeasuredWeight(null); setStep("wake"); }}>Нет, повторить мастер</button>}
+              {step === "save" && <button type="button" className="ghost" onClick={() => { setMeasuredWeight(null); setManualWeight(""); setCaptureCommandId(undefined); setStep("wake"); }}>Нет, повторить мастер</button>}
               <button type="button" className="ghost" disabled={loading} onClick={refresh}>{loading ? "Проверяем..." : "Проверить снова"}</button>
             </>
           ) : (
@@ -1191,7 +1280,19 @@ function DeviceCommandModal({
   );
 }
 
-function TareWizardContent({ action, step, measuredWeight }: { action: DeviceCommandAction; step: string; measuredWeight: number | null }) {
+function TareWizardContent({
+  action,
+  step,
+  measuredWeight,
+  manualWeight,
+  onManualWeightChange
+}: {
+  action: DeviceCommandAction;
+  step: string;
+  measuredWeight: number | null;
+  manualWeight: string;
+  onManualWeightChange: (value: string) => void;
+}) {
   if (step === "wake") {
     return <p className="command-note">Разбудите устройство вручную или дождитесь его пробуждения. Тара будет сохранена только в backend как параметр улья/магазина, не в устройство.</p>;
   }
@@ -1205,11 +1306,15 @@ function TareWizardContent({ action, step, measuredWeight }: { action: DeviceCom
     return (
       <div className="command-result">
         <strong>{measuredWeight === null ? "Ожидаем результат замера от устройства" : `${measuredWeight.toFixed(2).replace(".", ",")} кг`}</strong>
-        <span>{measuredWeight === null ? "Нужен firmware ack/result для команды capture_weight. После него кнопка сохранения станет активной." : "Следующий backend-инкремент сохранит это значение в scale_profile и будет вычитать его из сырого веса."}</span>
+        <span>{measuredWeight === null ? "Firmware ack/result для capture_weight еще не реализован. Для проверки MVP можно временно ввести сырой вес вручную." : "Это значение будет сохранено в scale_profile и будет вычитаться из сырого веса."}</span>
+        <label>
+          Сырой вес, кг
+          <input value={manualWeight} onChange={(event) => onManualWeightChange(event.target.value)} placeholder="Например 38,75" inputMode="decimal" />
+        </label>
       </div>
     );
   }
-  return <p className="command-note">После сохранения можно отпустить устройство в сон или начать мастер заново.</p>;
+  return <p className="command-note">Тара сохранена в backend. После сохранения можно отпустить устройство в сон или начать мастер заново.</p>;
 }
 
 function latestWakeTime(device: Device | null) {

@@ -41,6 +41,8 @@ private:
     String appliedApPassword_;
     bool lastPublishOk_ = false;
     String lastPublishMessage_ = "No telemetry published yet";
+    bool configSessionActive_ = false;
+    uint32_t configSessionExpiresMs_ = 0;
 
     void setupFileSystem();
     bool handleFactoryResetButton();
@@ -52,10 +54,11 @@ private:
     void measureAndSend();
     void enterDeepSleepIfEnabled();
     bool waitForTelemetryDelivery(uint32_t timeoutMs);
+    void waitForCommandMessages(uint32_t timeoutMs);
     void handleMqttMessage(const String& topic, const String& payload);
-    bool handleMqttCommand(const String& command, JsonVariantConst data, String& message);
+    bool handleMqttCommand(const String& command, JsonVariantConst data, JsonDocument& result, String& message);
     bool handleMqttConfigUpdate(JsonVariantConst data, String& message);
-    void publishCommandStatus(const String& command, bool ok, const String& message);
+    void publishCommandStatus(const String& commandId, const String& command, bool ok, const String& message, JsonVariantConst result = JsonVariantConst());
     String telemetryToJson(const Telemetry& telemetry) const;
     void publishOrBuffer(const String& payload);
     bool mqttConnected();

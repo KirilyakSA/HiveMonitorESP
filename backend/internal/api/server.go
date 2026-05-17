@@ -89,6 +89,8 @@ func (s *Server) Routes() http.Handler {
 
 		r.Route("/hives", func(r chi.Router) {
 			r.Delete("/{hiveID}", s.deleteHive)
+			r.Get("/{hiveID}/scale/profile", s.hiveScaleProfile)
+			r.Post("/{hiveID}/scale/tare", s.saveHiveTare)
 			r.Get("/{hiveID}/telemetry/latest", s.latestTelemetry)
 			r.Get("/{hiveID}/telemetry/history", s.telemetryHistory)
 			r.Get("/{hiveID}/events", s.hiveEvents)
@@ -488,6 +490,31 @@ func (s *Server) telemetryHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, readings)
+}
+
+func (s *Server) hiveScaleProfile(w http.ResponseWriter, r *http.Request) {
+	profile, err := s.repo.HiveScaleProfile(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "hiveID"))
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, profile)
+}
+
+func (s *Server) saveHiveTare(w http.ResponseWriter, r *http.Request) {
+	var input domain.SaveHiveTareInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if len(input.Metadata) == 0 {
+		input.Metadata = json.RawMessage(`{}`)
+	}
+	event, err := s.repo.SaveHiveTare(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "hiveID"), input)
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, event)
 }
 
 func (s *Server) apiaryEvents(w http.ResponseWriter, r *http.Request) {

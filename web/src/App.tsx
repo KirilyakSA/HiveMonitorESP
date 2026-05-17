@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiClient } from "./api";
-import type { AdviceItem, Apiary, ApiaryTask, Device, DeviceCommand, DeviceEvent, Hive, Organization, SensorReading, User } from "./api";
+import type { AdviceItem, Apiary, ApiaryTask, Device, DeviceCommand, DeviceEvent, Hive, HiveTareEvent, Organization, SensorReading, User } from "./api";
 import {
   AlertsPanel,
   ApiariesScreen,
@@ -339,6 +339,32 @@ export function App() {
     return device;
   }
 
+  async function loadDeviceCommands(deviceId: string) {
+    if (!selectedApiaryId) throw new Error("Пасека не выбрана");
+    const commands = await client.deviceCommands(selectedApiaryId, deviceId);
+    if (deviceId === selectedHive?.assigned_device_id) setDeviceCommands(commands);
+    return commands;
+  }
+
+  async function saveHiveTare(input: {
+    tare_kind: "hive" | "super";
+    measured_raw_weight_kg: number;
+    super_index?: number;
+    command_id?: string;
+    comment?: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<HiveTareEvent> {
+    if (!selectedHiveId) throw new Error("Улей не выбран");
+    const event = await client.saveHiveTare(selectedHiveId, {
+      ...input,
+      device_id: selectedHive?.assigned_device_id
+    });
+    setMessage("Тара сохранена, вес пересчитан относительно нового нуля");
+    await loadHiveData(selectedHiveId, comparisonPeriod);
+    if (selectedApiaryId) await loadApiaryData(selectedApiaryId, comparisonPeriod);
+    return event;
+  }
+
   async function loadApiarySummaries(items: Apiary[]) {
     try {
       const pairs = await Promise.all(
@@ -493,6 +519,8 @@ export function App() {
           onDeleteDevice={selectedHive.assigned_device_id ? () => deleteDevice(selectedHive.assigned_device_id!) : undefined}
           onSendCommand={selectedHive.assigned_device_id ? (command, payload) => sendDeviceCommand(selectedHive.assigned_device_id!, command, payload) : undefined}
           onLoadDevice={selectedHive.assigned_device_id ? () => loadDevice(selectedHive.assigned_device_id!) : undefined}
+          onLoadCommands={selectedHive.assigned_device_id ? () => loadDeviceCommands(selectedHive.assigned_device_id!) : undefined}
+          onSaveTare={saveHiveTare}
           onClose={() => setSelectedHiveId("")}
         />
       )}

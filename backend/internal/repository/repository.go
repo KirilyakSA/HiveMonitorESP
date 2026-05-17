@@ -608,6 +608,31 @@ func (r *Repository) MarkDeviceCommandFailed(ctx context.Context, commandID stri
 	return scanDeviceCommand(row)
 }
 
+func (r *Repository) MarkDeviceCommandAcknowledged(ctx context.Context, commandID string, ok bool, message string, result json.RawMessage) (*domain.DeviceCommand, error) {
+	status := "acknowledged"
+	errorMessage := ""
+	if !ok {
+		status = "failed"
+		errorMessage = message
+	}
+	if len(result) == 0 || !json.Valid(result) {
+		result = json.RawMessage(`null`)
+	}
+	row := r.db.QueryRow(ctx, `
+		update device_commands
+		set status = $2,
+			error_message = $3,
+			result = $4::jsonb,
+			acknowledged_at = now(),
+			updated_at = now()
+		where id = $1
+		returning id, apiary_id, device_id, device_public_id, requested_by, command, payload,
+			status, mqtt_topic, published_topics, error_message, coalesce(result, 'null'::jsonb),
+			created_at, published_at, acknowledged_at, expires_at, updated_at
+	`, commandID, status, errorMessage, string(result))
+	return scanDeviceCommand(row)
+}
+
 func (r *Repository) ListDeviceCommands(ctx context.Context, userID, apiaryID, deviceUUID string, limit int) ([]domain.DeviceCommand, error) {
 	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
 	if err != nil {
@@ -812,6 +837,11 @@ type IngestDeviceStatusInput struct {
 	DeviceType      string
 	FirmwareVersion string
 	ConfigVersion   *int
+	CommandID       string
+	Command         string
+	OK              *bool
+	Message         string
+	Result          json.RawMessage
 	StatusAt        time.Time
 	RawPayload      json.RawMessage
 	RawTopic        string
@@ -1036,6 +1066,29 @@ func (r *Repository) IngestDeviceStatus(ctx context.Context, input IngestDeviceS
 	if err != nil {
 		return nil, err
 	}
+	if input.CommandID != "" {
+		commandStatus := "acknowledged"
+		errorMessage := ""
+		if input.OK != nil && !*input.OK {
+			commandStatus = "failed"
+			errorMessage = input.Message
+		}
+		result := input.Result
+		if len(result) == 0 || !json.Valid(result) {
+			result = json.RawMessage(`null`)
+		}
+		if _, err := tx.Exec(ctx, `
+			update device_commands
+			set status = $2,
+				error_message = $3,
+				result = $4::jsonb,
+				acknowledged_at = now(),
+				updated_at = now()
+			where id = $1
+		`, input.CommandID, commandStatus, errorMessage, string(result)); err != nil {
+			return nil, err
+		}
+	}
 	return device, tx.Commit(ctx)
 }
 
@@ -1138,9 +1191,13 @@ func (r *Repository) LatestTelemetryForHive(ctx context.Context, userID, hiveID 
 
 	rows, err := r.db.Query(ctx, `
 		select distinct on (metric_type)
-			id, device_id, apiary_id, hive_id, metric_type, value, unit, measured_at, received_at
-		from sensor_readings
-		where hive_id = $1
+			sr.id, sr.device_id, sr.apiary_id, sr.hive_id, sr.metric_type,
+			case when sr.metric_type = 'weight' then sr.value - coalesce(sp.active_tare_kg, 0) else sr.value end as value,
+			case when sr.metric_type = 'weight' then sr.value else null end as raw_value,
+			sr.unit, sr.measured_at, sr.received_at
+		from sensor_readings sr
+		left join hive_scale_profiles sp on sp.hive_id = sr.hive_id
+		where sr.hive_id = $1
 		order by metric_type, measured_at desc
 	`, hiveID)
 	if err != nil {
@@ -1170,13 +1227,17 @@ func (r *Repository) TelemetryHistoryForHive(ctx context.Context, userID, hiveID
 		limit = 1000
 	}
 	rows, err := r.db.Query(ctx, `
-		select id, device_id, apiary_id, hive_id, metric_type, value, unit, measured_at, received_at
-		from sensor_readings
-		where hive_id = $1
-			and measured_at >= $2
-			and measured_at <= $3
-			and ($4 = '' or metric_type = $4)
-		order by measured_at asc
+		select sr.id, sr.device_id, sr.apiary_id, sr.hive_id, sr.metric_type,
+			case when sr.metric_type = 'weight' then sr.value - coalesce(sp.active_tare_kg, 0) else sr.value end as value,
+			case when sr.metric_type = 'weight' then sr.value else null end as raw_value,
+			sr.unit, sr.measured_at, sr.received_at
+		from sensor_readings sr
+		left join hive_scale_profiles sp on sp.hive_id = sr.hive_id
+		where sr.hive_id = $1
+			and sr.measured_at >= $2
+			and sr.measured_at <= $3
+			and ($4 = '' or sr.metric_type = $4)
+		order by sr.measured_at asc
 		limit $5
 	`, hiveID, from, to, metric, limit)
 	if err != nil {
@@ -1184,6 +1245,139 @@ func (r *Repository) TelemetryHistoryForHive(ctx context.Context, userID, hiveID
 	}
 	defer rows.Close()
 	return scanReadings(rows)
+}
+
+func (r *Repository) HiveScaleProfile(ctx context.Context, userID, hiveID string) (*domain.HiveScaleProfile, error) {
+	var apiaryID string
+	if err := r.db.QueryRow(ctx, `select apiary_id from hives where id = $1`, hiveID).Scan(&apiaryID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	row := r.db.QueryRow(ctx, `
+		insert into hive_scale_profiles (hive_id, apiary_id)
+		values ($1, $2)
+		on conflict (hive_id) do update set hive_id = excluded.hive_id
+		returning hive_id, apiary_id, empty_hive_tare_kg, active_tare_kg, super_tares,
+			updated_by, created_at, updated_at
+	`, hiveID, apiaryID)
+	return scanHiveScaleProfile(row)
+}
+
+func (r *Repository) SaveHiveTare(ctx context.Context, userID, hiveID string, input domain.SaveHiveTareInput) (*domain.HiveTareEvent, error) {
+	input.TareKind = strings.TrimSpace(input.TareKind)
+	if input.TareKind != "hive" && input.TareKind != "super" {
+		return nil, fmt.Errorf("%w: tare_kind must be hive or super", ErrInvalidInput)
+	}
+	if input.MeasuredRawWeightKG <= 0 {
+		return nil, fmt.Errorf("%w: measured_raw_weight_kg must be greater than zero", ErrInvalidInput)
+	}
+	if len(input.Metadata) == 0 {
+		input.Metadata = json.RawMessage(`{}`)
+	}
+	if !json.Valid(input.Metadata) {
+		return nil, fmt.Errorf("%w: metadata must be valid JSON", ErrInvalidInput)
+	}
+
+	var apiaryID string
+	if err := r.db.QueryRow(ctx, `select apiary_id from hives where id = $1`, hiveID).Scan(&apiaryID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	var previousActive float64
+	var superTares []byte
+	if err := tx.QueryRow(ctx, `
+		insert into hive_scale_profiles (hive_id, apiary_id)
+		values ($1, $2)
+		on conflict (hive_id) do update set hive_id = excluded.hive_id
+		returning active_tare_kg, super_tares
+	`, hiveID, apiaryID).Scan(&previousActive, &superTares); err != nil {
+		return nil, err
+	}
+
+	var nextActive = input.MeasuredRawWeightKG
+	var superIndex *int
+	nextSuperTares := json.RawMessage(superTares)
+	if input.TareKind == "super" {
+		index := 1
+		if input.SuperIndex != nil && *input.SuperIndex > 0 {
+			index = *input.SuperIndex
+		} else {
+			index = nextSuperIndex(superTares)
+		}
+		superIndex = &index
+		nextSuperTares, err = upsertSuperTare(superTares, index, input.MeasuredRawWeightKG, time.Now().UTC())
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if input.TareKind == "hive" {
+		_, err = tx.Exec(ctx, `
+			update hive_scale_profiles
+			set empty_hive_tare_kg = $2,
+				active_tare_kg = $2,
+				updated_by = $3,
+				updated_at = now()
+			where hive_id = $1
+		`, hiveID, input.MeasuredRawWeightKG, userID)
+	} else {
+		_, err = tx.Exec(ctx, `
+			update hive_scale_profiles
+			set active_tare_kg = $2,
+				super_tares = $3,
+				updated_by = $4,
+				updated_at = now()
+			where hive_id = $1
+		`, hiveID, nextActive, string(nextSuperTares), userID)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	row := tx.QueryRow(ctx, `
+		insert into hive_tare_events (
+			hive_id, apiary_id, device_id, command_id, tare_kind, super_index,
+			measured_raw_weight_kg, previous_active_tare_kg, new_active_tare_kg,
+			comment, metadata, created_by
+		)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12)
+		returning id, hive_id, apiary_id, device_id, command_id, tare_kind, super_index,
+			measured_raw_weight_kg, previous_active_tare_kg, new_active_tare_kg,
+			comment, metadata, created_by, created_at
+	`, hiveID, apiaryID, input.DeviceID, input.CommandID, input.TareKind, superIndex,
+		input.MeasuredRawWeightKG, previousActive, nextActive, strings.TrimSpace(input.Comment),
+		string(input.Metadata), userID)
+	event, err := scanHiveTareEvent(row)
+	if err != nil {
+		return nil, err
+	}
+	return event, tx.Commit(ctx)
 }
 
 func (r *Repository) EventsForApiary(ctx context.Context, userID, apiaryID string, limit int) ([]domain.DeviceEvent, error) {
@@ -1580,7 +1774,7 @@ func scanReadings(rows pgx.Rows) ([]domain.SensorReading, error) {
 		var reading domain.SensorReading
 		if err := rows.Scan(
 			&reading.ID, &reading.DeviceID, &reading.ApiaryID, &reading.HiveID,
-			&reading.MetricType, &reading.Value, &reading.Unit, &reading.MeasuredAt,
+			&reading.MetricType, &reading.Value, &reading.RawValue, &reading.Unit, &reading.MeasuredAt,
 			&reading.ReceivedAt,
 		); err != nil {
 			return nil, err
@@ -1588,6 +1782,79 @@ func scanReadings(rows pgx.Rows) ([]domain.SensorReading, error) {
 		result = append(result, reading)
 	}
 	return result, rows.Err()
+}
+
+func scanHiveScaleProfile(row pgx.Row) (*domain.HiveScaleProfile, error) {
+	var profile domain.HiveScaleProfile
+	if err := row.Scan(
+		&profile.HiveID, &profile.APIaryID, &profile.EmptyHiveTareKG, &profile.ActiveTareKG,
+		&profile.SuperTares, &profile.UpdatedBy, &profile.CreatedAt, &profile.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &profile, nil
+}
+
+func scanHiveTareEvent(row pgx.Row) (*domain.HiveTareEvent, error) {
+	var event domain.HiveTareEvent
+	if err := row.Scan(
+		&event.ID, &event.HiveID, &event.APIaryID, &event.DeviceID, &event.CommandID,
+		&event.TareKind, &event.SuperIndex, &event.MeasuredRawWeightKG,
+		&event.PreviousActiveTareKG, &event.NewActiveTareKG, &event.Comment,
+		&event.Metadata, &event.CreatedBy, &event.CreatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &event, nil
+}
+
+func nextSuperIndex(data []byte) int {
+	var items []struct {
+		Index int `json:"index"`
+	}
+	if err := json.Unmarshal(data, &items); err != nil {
+		return 1
+	}
+	next := 1
+	for _, item := range items {
+		if item.Index >= next {
+			next = item.Index + 1
+		}
+	}
+	return next
+}
+
+func upsertSuperTare(data []byte, index int, weight float64, measuredAt time.Time) (json.RawMessage, error) {
+	type superTare struct {
+		Index               int       `json:"index"`
+		MeasuredRawWeightKG float64   `json:"measured_raw_weight_kg"`
+		MeasuredAt          time.Time `json:"measured_at"`
+	}
+	var items []superTare
+	if len(data) > 0 {
+		if err := json.Unmarshal(data, &items); err != nil {
+			return nil, err
+		}
+	}
+	replaced := false
+	for i := range items {
+		if items[i].Index == index {
+			items[i].MeasuredRawWeightKG = weight
+			items[i].MeasuredAt = measuredAt
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		items = append(items, superTare{Index: index, MeasuredRawWeightKG: weight, MeasuredAt: measuredAt})
+	}
+	return json.Marshal(items)
 }
 
 func scanDeviceEvents(rows pgx.Rows) ([]domain.DeviceEvent, error) {

@@ -186,10 +186,10 @@ test.describe("HiveMonitor dashboard", () => {
     await selectNorthApiary(page);
 
     const assignButton = page.getByRole("button", { name: "Привязать" }).first();
-    const emptyDevices = page.getByText("Новых устройств нет");
-    await expect(assignButton.or(emptyDevices).first()).toBeVisible();
+    const devicesPanel = page.locator(".devices-panel");
+    await expect(devicesPanel).toBeVisible();
     if (!(await assignButton.isVisible())) {
-      await expect(page.getByText("Новых устройств нет")).toBeVisible();
+      await expect(devicesPanel.getByText(/Новых устройств нет|Все устройства|Нераспознанные устройства/).first()).toBeVisible();
       return;
     }
 

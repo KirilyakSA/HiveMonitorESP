@@ -134,6 +134,8 @@ PATCH /apiaries/{apiaryID}/calendar/tasks/{taskID}
 GET  /hives/{hiveID}/telemetry/latest
 GET  /hives/{hiveID}/telemetry/history
 GET  /hives/{hiveID}/events
+GET  /hives/{hiveID}/scale/profile
+POST /hives/{hiveID}/scale/tare
 DELETE /hives/{hiveID}
 ```
 
@@ -153,10 +155,12 @@ Device command MVP / MVP команд устройств:
   EN: hive tare and super tare are not sent to the device. They are backend hive parameters: the backend stores tare weight and subtracts it from raw device weight to show useful/net weight in web/mobile.
 - RU: для backend-тары устройство все равно участвует в процессе: UI удерживает устройство командой `hold_config_session`, просит подготовить улей/магазин, отправляет `capture_weight` для одноразового сырого замера и закрывает сеанс через `finish_config_session`; сохранение тары происходит только в backend.
   EN: for backend tare, the device still participates in the process: the UI keeps it awake with `hold_config_session`, asks the user to prepare the hive/super, sends `capture_weight` for a one-off raw measurement and closes the session with `finish_config_session`; tare storage happens only in the backend.
+- RU: `POST /hives/{hiveID}/scale/tare` сохраняет тару в `hive_scale_profiles`, пишет историю в `hive_tare_events`, а telemetry endpoints возвращают `weight` уже как полезный вес; оригинальный сырой вес доступен в `raw_value`.
+  EN: `POST /hives/{hiveID}/scale/tare` stores tare in `hive_scale_profiles`, records history in `hive_tare_events`, and telemetry endpoints return `weight` as useful/net weight; the original raw weight is available in `raw_value`.
 - RU: публикация идет в `apiaries/{apiaryId}/devices/{deviceId}/commands` и legacy `hives/{deviceId}/commands`.
   EN: publishing goes to `apiaries/{apiaryId}/devices/{deviceId}/commands` and legacy `hives/{deviceId}/commands`.
-- RU: статусы `acknowledged`, `expired` и сохранение результата firmware заложены в модель и будут включены после firmware ack flow.
-  EN: `acknowledged`, `expired` statuses and firmware result storage are modeled and will be enabled after the firmware ack flow.
+- RU: firmware публикует `commandStatus` с `commandId`; backend status ingestion переводит команду в `acknowledged`/`failed` и сохраняет `result`, например `raw_weight_kg` для `capture_weight`. `expired` остается следующим worker-инкрементом.
+  EN: firmware publishes `commandStatus` with `commandId`; backend status ingestion marks the command as `acknowledged`/`failed` and stores `result`, for example `raw_weight_kg` for `capture_weight`. `expired` remains a future worker increment.
 
 ## Календарь работ и советы
 

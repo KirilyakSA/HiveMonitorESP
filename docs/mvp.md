@@ -28,7 +28,7 @@
 - События и статусы в legacy или apiary-aware MQTT topics.
 - MQTT-команды backend: `reboot`, `firmware_update`, `config_update`.
 - Firmware tare и калибровка весов выполняются локально в web-интерфейсе устройства.
-- Backend-тара улья/магазинов является параметром улья и вычитается из сырого веса в API/UI.
+- Backend-тара улья/магазинов является параметром улья, сохраняется в `hive_scale_profiles`, журналируется в `hive_tare_events` и вычитается из сырого веса в API/UI.
 - Буферизация телеметрии в LittleFS.
 - Локальное web-обновление прошивки.
 - Factory reset кнопкой.
@@ -104,7 +104,7 @@ Web: login/register, create organization/apiary/hive, assign device, view teleme
 - Legacy mode `hives/{deviceId}/...` остается только для совместимости и dev/MVP.
 - Для production provisioning нужно задавать `apiaryId` в локальной конфигурации firmware и использовать topics `apiaries/{apiary_id}/devices/{device_id}/...`.
 - Backend отправляет MQTT-команды устройствам через `device_commands`; firmware ack/result flow еще не реализован.
-- Web отправляет базовые команды обслуживания. Backend workflow тары улья/магазинов еще не реализован.
+- Web отправляет базовые команды обслуживания и мастер backend-тары. Firmware публикует ack/result для `capture_weight`; ручной fallback raw-веса в dev UI остается как страховка для старых прошивок.
 - Alerts, системные теги, события от alerts и уведомления еще не реализованы.
 - Проверка пропущенных передач еще не реализована.
 - Tasks/reminders еще не реализованы.

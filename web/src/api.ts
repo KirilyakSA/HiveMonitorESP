@@ -72,9 +72,38 @@ export type SensorReading = {
   hive_id?: string;
   metric_type: string;
   value: number;
+  raw_value?: number;
   unit: string;
   measured_at: string;
   received_at: string;
+};
+
+export type HiveScaleProfile = {
+  hive_id: string;
+  apiary_id: string;
+  empty_hive_tare_kg?: number;
+  active_tare_kg: number;
+  super_tares: Array<Record<string, unknown>>;
+  updated_by?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type HiveTareEvent = {
+  id: string;
+  hive_id: string;
+  apiary_id: string;
+  device_id?: string;
+  command_id?: string;
+  tare_kind: "hive" | "super" | string;
+  super_index?: number;
+  measured_raw_weight_kg: number;
+  previous_active_tare_kg: number;
+  new_active_tare_kg: number;
+  comment: string;
+  metadata: Record<string, unknown> | null;
+  created_by?: string;
+  created_at: string;
 };
 
 export type DeviceEvent = {
@@ -221,6 +250,25 @@ export class ApiClient {
 
   deleteHive(hiveId: string): Promise<void> {
     return this.request(`/hives/${hiveId}`, { method: "DELETE" });
+  }
+
+  hiveScaleProfile(hiveId: string): Promise<HiveScaleProfile> {
+    return this.request(`/hives/${hiveId}/scale/profile`);
+  }
+
+  saveHiveTare(
+    hiveId: string,
+    input: {
+      tare_kind: "hive" | "super";
+      measured_raw_weight_kg: number;
+      super_index?: number;
+      device_id?: string;
+      command_id?: string;
+      comment?: string;
+      metadata?: Record<string, unknown>;
+    }
+  ): Promise<HiveTareEvent> {
+    return this.request(`/hives/${hiveId}/scale/tare`, { method: "POST", body: input });
   }
 
   unassignedDevices(apiaryId: string): Promise<Device[]> {

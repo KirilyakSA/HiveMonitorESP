@@ -64,6 +64,10 @@ void HiveMonitorApp::loop() {
     }
     timeService_.loop(configManager_.data());
     mqttService_.loop(configManager_.data());
+    if (configSessionActive_ && configSessionExpiresMs_ != 0 && (int32_t)(millis() - configSessionExpiresMs_) >= 0) {
+        configSessionActive_ = false;
+        configSessionExpiresMs_ = 0;
+    }
 
     if (mqttService_.connected()) {
         telemetryBuffer_.flushTo([this](const String& line) {
@@ -243,6 +247,11 @@ void HiveMonitorApp::enterDeepSleepIfEnabled() {
     if (sleepSeconds == 0) sleepSeconds = 1800;
 
     waitForTelemetryDelivery(10000);
+    waitForCommandMessages(3000);
+    if (configSessionActive_) {
+        Serial.println("Deep sleep skipped: configuration session is active");
+        return;
+    }
     Serial.print("Deep sleep for ");
     Serial.print(sleepSeconds);
     Serial.println(" seconds");
@@ -274,6 +283,20 @@ bool HiveMonitorApp::waitForTelemetryDelivery(uint32_t timeoutMs) {
     return false;
 }
 
+void HiveMonitorApp::waitForCommandMessages(uint32_t timeoutMs) {
+    const AppConfig& cfg = configManager_.data();
+    if (WiFi.status() != WL_CONNECTED || cfg.mqttHost.length() == 0) {
+        return;
+    }
+
+    uint32_t started = millis();
+    do {
+        mqttService_.loop(cfg);
+        delay(100);
+        yield();
+    } while (millis() - started < timeoutMs && !configSessionActive_);
+}
+
 void HiveMonitorApp::handleMqttMessage(const String& topic, const String& payload) {
     const AppConfig& cfg = configManager_.data();
     String legacyCommandsTopic = "hives/" + cfg.deviceId + "/commands";
@@ -288,11 +311,17 @@ void HiveMonitorApp::handleMqttMessage(const String& topic, const String& payloa
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, payload);
     String command;
+    String commandId;
     JsonVariantConst data;
 
     if (!err) {
+        commandId = doc["id"] | doc["commandId"] | "";
         command = doc["command"] | doc["cmd"] | "";
-        data = doc["data"].isNull() ? doc.as<JsonVariantConst>() : doc["data"].as<JsonVariantConst>();
+        if (!doc["payload"].isNull()) {
+            data = doc["payload"].as<JsonVariantConst>();
+        } else {
+            data = doc["data"].isNull() ? doc.as<JsonVariantConst>() : doc["data"].as<JsonVariantConst>();
+        }
     } else {
         command = payload;
         command.trim();
@@ -308,20 +337,21 @@ void HiveMonitorApp::handleMqttMessage(const String& topic, const String& payloa
         return;
     }
     if (command.length() == 0) {
-        publishCommandStatus("unknown", false, "Missing command");
+        publishCommandStatus(commandId, "unknown", false, "Missing command");
         return;
     }
 
     String message;
-    bool ok = handleMqttCommand(command, data, message);
-    publishCommandStatus(command, ok, message);
-    if (ok && command == "restart") {
+    JsonDocument result;
+    bool ok = handleMqttCommand(command, data, result, message);
+    publishCommandStatus(commandId, command, ok, message, result.as<JsonVariantConst>());
+    if (ok && (command == "restart" || command == "reboot")) {
         delay(500);
         platformRestart();
     }
 }
 
-bool HiveMonitorApp::handleMqttCommand(const String& command, JsonVariantConst data, String& message) {
+bool HiveMonitorApp::handleMqttCommand(const String& command, JsonVariantConst data, JsonDocument& result, String& message) {
     if (command == "__payloadTooLarge") {
         message = "MQTT payload is too large";
         return false;
@@ -331,8 +361,42 @@ bool HiveMonitorApp::handleMqttCommand(const String& command, JsonVariantConst d
         message = "Measurement published or buffered";
         return true;
     }
-    if (command == "restart") {
+    if (command == "restart" || command == "reboot") {
         message = "Restarting";
+        return true;
+    }
+    if (command == "hold_config_session") {
+        uint32_t holdSeconds = data["hold_seconds"] | data["holdSeconds"] | 600;
+        if (holdSeconds < 30) holdSeconds = 30;
+        if (holdSeconds > 1800) holdSeconds = 1800;
+        configSessionActive_ = true;
+        configSessionExpiresMs_ = millis() + holdSeconds * 1000UL;
+        result["session_active"] = true;
+        result["hold_seconds"] = holdSeconds;
+        message = "Configuration session is active";
+        return true;
+    }
+    if (command == "capture_weight") {
+        if (!configSessionActive_) {
+            message = "Configuration session is not active";
+            return false;
+        }
+        float weight = loadCell_.readKg(10);
+        if (isnan(weight)) {
+            message = "Weight capture failed";
+            return false;
+        }
+        result["weight_kg"] = serialized(jsonFloat(weight));
+        result["raw_weight_kg"] = serialized(jsonFloat(weight));
+        result["session_active"] = true;
+        message = "Weight captured";
+        return true;
+    }
+    if (command == "finish_config_session") {
+        configSessionActive_ = false;
+        configSessionExpiresMs_ = 0;
+        result["session_active"] = false;
+        message = "Configuration session finished";
         return true;
     }
     if (command == "tare") {
@@ -345,8 +409,12 @@ bool HiveMonitorApp::handleMqttCommand(const String& command, JsonVariantConst d
         message = ok ? "Buffer cleared" : "Buffer clear failed";
         return ok;
     }
-    if (command == "configUpdate") {
+    if (command == "configUpdate" || command == "config_update") {
         return handleMqttConfigUpdate(data, message);
+    }
+    if (command == "firmware_update") {
+        message = "Firmware update command is not implemented in firmware yet";
+        return false;
     }
 
     message = "Unsupported command";
@@ -371,7 +439,7 @@ bool HiveMonitorApp::handleMqttConfigUpdate(JsonVariantConst data, String& messa
     return true;
 }
 
-void HiveMonitorApp::publishCommandStatus(const String& command, bool ok, const String& message) {
+void HiveMonitorApp::publishCommandStatus(const String& commandId, const String& command, bool ok, const String& message, JsonVariantConst result) {
     JsonDocument doc;
     doc["schemaVersion"] = 1;
     doc["firmwareVersion"] = HIVE_FW_VERSION;
@@ -381,9 +449,15 @@ void HiveMonitorApp::publishCommandStatus(const String& command, bool ok, const 
     }
     doc["timestamp"] = timeService_.isoTimestamp();
     doc["type"] = "commandStatus";
+    if (commandId.length() > 0) {
+        doc["commandId"] = commandId;
+    }
     doc["command"] = command;
     doc["ok"] = ok;
     doc["message"] = message;
+    if (!result.isNull()) {
+        doc["result"] = result;
+    }
 
     String payload;
     serializeJson(doc, payload);

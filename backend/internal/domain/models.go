@@ -92,9 +92,48 @@ type SensorReading struct {
 	HiveID     *string   `json:"hive_id,omitempty"`
 	MetricType string    `json:"metric_type"`
 	Value      float64   `json:"value"`
+	RawValue   *float64  `json:"raw_value,omitempty"`
 	Unit       string    `json:"unit"`
 	MeasuredAt time.Time `json:"measured_at"`
 	ReceivedAt time.Time `json:"received_at"`
+}
+
+type HiveScaleProfile struct {
+	HiveID          string          `json:"hive_id"`
+	APIaryID        string          `json:"apiary_id"`
+	EmptyHiveTareKG *float64        `json:"empty_hive_tare_kg,omitempty"`
+	ActiveTareKG    float64         `json:"active_tare_kg"`
+	SuperTares      json.RawMessage `json:"super_tares"`
+	UpdatedBy       *string         `json:"updated_by,omitempty"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+}
+
+type HiveTareEvent struct {
+	ID                   string          `json:"id"`
+	HiveID               string          `json:"hive_id"`
+	APIaryID             string          `json:"apiary_id"`
+	DeviceID             *string         `json:"device_id,omitempty"`
+	CommandID            *string         `json:"command_id,omitempty"`
+	TareKind             string          `json:"tare_kind"`
+	SuperIndex           *int            `json:"super_index,omitempty"`
+	MeasuredRawWeightKG  float64         `json:"measured_raw_weight_kg"`
+	PreviousActiveTareKG float64         `json:"previous_active_tare_kg"`
+	NewActiveTareKG      float64         `json:"new_active_tare_kg"`
+	Comment              string          `json:"comment"`
+	Metadata             json.RawMessage `json:"metadata"`
+	CreatedBy            *string         `json:"created_by,omitempty"`
+	CreatedAt            time.Time       `json:"created_at"`
+}
+
+type SaveHiveTareInput struct {
+	TareKind            string          `json:"tare_kind"`
+	SuperIndex          *int            `json:"super_index,omitempty"`
+	MeasuredRawWeightKG float64         `json:"measured_raw_weight_kg"`
+	DeviceID            *string         `json:"device_id,omitempty"`
+	CommandID           *string         `json:"command_id,omitempty"`
+	Comment             string          `json:"comment"`
+	Metadata            json.RawMessage `json:"metadata"`
 }
 
 type DeviceEvent struct {

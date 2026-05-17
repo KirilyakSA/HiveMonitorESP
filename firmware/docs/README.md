@@ -167,16 +167,18 @@ apiaries/{apiaryId}/devices/{deviceId}/status
 
 Поддерживаемые команды:
 
-- `measure` - немедленно выполнить измерение;
-- `restart` - перезагрузить устройство;
-- `tare` - выполнить тарирование и сохранить смещение;
-- `clearBuffer` - очистить локальный буфер телеметрии;
-- `configUpdate` - применить JSON-конфигурацию.
+- `reboot` / `restart` - перезагрузить устройство;
+- `config_update` / `configUpdate` - применить JSON-конфигурацию;
+- `hold_config_session` - удержать устройство активным и не уходить в deep sleep;
+- `capture_weight` - выполнить одноразовый raw-замер веса для backend-мастера тары;
+- `finish_config_session` - завершить сессию настройки и снова разрешить deep sleep;
+- `firmware_update` - зарезервирована под будущий OTA flow, сейчас возвращает ошибку "not implemented";
+- legacy/dev команды `measure`, `tare`, `clearBuffer` пока сохранены для локальной совместимости.
 
 Команды можно отправлять строкой (`measure`) или JSON:
 
 ```json
-{"command":"measure"}
+{"id":"command_uuid","command":"capture_weight","payload":{"purpose":"hive_tare"}}
 ```
 
 Для обновления конфигурации:
@@ -189,6 +191,23 @@ apiaries/{apiaryId}/devices/{deviceId}/status
 
 Ответ публикуется в текущий status topic: `hives/{deviceId}/status` в legacy mode или `apiaries/{apiaryId}/devices/{deviceId}/status` при заданном `apiaryId`.
 
+Для команд из backend ответ содержит `commandId`, `ok`, `message` и при наличии `result`.
+Для `capture_weight` результат содержит:
+
+```json
+{
+  "type": "commandStatus",
+  "commandId": "command_uuid",
+  "command": "capture_weight",
+  "ok": true,
+  "result": {
+    "weight_kg": 38.75,
+    "raw_weight_kg": 38.75,
+    "session_active": true
+  }
+}
+```
+
 ## Датчик Холла и сон
 
 Для ESP8266 поддерживаются режимы:
@@ -198,7 +217,7 @@ apiaries/{apiaryId}/devices/{deviceId}/status
 
 Для ESP32 нужно предусмотреть wake-up по GPIO средствами deep sleep.
 
-Перед уходом в deep sleep прошивка пытается доставить текущую и буферизованную телеметрию в MQTT в пределах ограниченного таймаута. Если связь недоступна, данные остаются в локальном буфере до следующего пробуждения.
+Перед уходом в deep sleep прошивка пытается доставить текущую и буферизованную телеметрию в MQTT в пределах ограниченного таймаута, затем коротко слушает входящие команды. Если пришла `hold_config_session`, deep sleep откладывается до `finish_config_session` или истечения hold timeout. Если связь недоступна, данные остаются в локальном буфере до следующего пробуждения.
 
 ## Время
 
