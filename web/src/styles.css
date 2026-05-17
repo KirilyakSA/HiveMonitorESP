@@ -1759,6 +1759,32 @@ a {
   gap: 10px;
 }
 
+.scale-profile-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.scale-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.scale-super-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.scale-super-list span {
+  border: 1px solid #dfe5ee;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
 .command-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -91,6 +91,7 @@ func (s *Server) Routes() http.Handler {
 			r.Delete("/{hiveID}", s.deleteHive)
 			r.Get("/{hiveID}/scale/profile", s.hiveScaleProfile)
 			r.Post("/{hiveID}/scale/tare", s.saveHiveTare)
+			r.Post("/{hiveID}/scale/supers/remove", s.removeHiveSuperTare)
 			r.Get("/{hiveID}/telemetry/latest", s.latestTelemetry)
 			r.Get("/{hiveID}/telemetry/history", s.telemetryHistory)
 			r.Get("/{hiveID}/events", s.hiveEvents)
@@ -510,6 +511,22 @@ func (s *Server) saveHiveTare(w http.ResponseWriter, r *http.Request) {
 		input.Metadata = json.RawMessage(`{}`)
 	}
 	event, err := s.repo.SaveHiveTare(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "hiveID"), input)
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, event)
+}
+
+func (s *Server) removeHiveSuperTare(w http.ResponseWriter, r *http.Request) {
+	var input domain.RemoveHiveSuperInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if len(input.Metadata) == 0 {
+		input.Metadata = json.RawMessage(`{}`)
+	}
+	event, err := s.repo.RemoveHiveSuperTare(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "hiveID"), input)
 	if err != nil {
 		s.handleRepoError(w, err)
 		return

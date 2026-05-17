@@ -89,6 +89,12 @@ export type HiveScaleProfile = {
   updated_at: string;
 };
 
+export type HiveSuperTare = {
+  index: number;
+  measured_raw_weight_kg: number;
+  measured_at?: string;
+};
+
 export type HiveTareEvent = {
   id: string;
   hive_id: string;
@@ -269,6 +275,10 @@ export class ApiClient {
     }
   ): Promise<HiveTareEvent> {
     return this.request(`/hives/${hiveId}/scale/tare`, { method: "POST", body: input });
+  }
+
+  removeHiveSuperTare(hiveId: string, input: { super_index?: number; comment?: string; metadata?: Record<string, unknown> } = {}): Promise<HiveTareEvent> {
+    return this.request(`/hives/${hiveId}/scale/supers/remove`, { method: "POST", body: input });
   }
 
   unassignedDevices(apiaryId: string): Promise<Device[]> {

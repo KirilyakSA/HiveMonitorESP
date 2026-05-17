@@ -39,6 +39,8 @@ import {
   DeviceCommand,
   DeviceEvent,
   Hive,
+  HiveScaleProfile,
+  HiveSuperTare,
   HiveTareEvent,
   Organization,
   SensorReading,
@@ -878,12 +880,13 @@ export function ComparisonPanel({
   );
 }
 
-export function HiveDetail({ hive, state, latestByMetric, commands, device, onLoadHistory, onDeleteHive, onDeleteDevice, onSendCommand, onLoadDevice, onLoadCommands, onSaveTare, onClose }: {
+export function HiveDetail({ hive, state, latestByMetric, commands, device, scaleProfile, onLoadHistory, onDeleteHive, onDeleteDevice, onSendCommand, onLoadDevice, onLoadCommands, onSaveTare, onRemoveSuperTare, onClose }: {
   hive: Hive;
   state: HiveState;
   latestByMetric: Record<string, SensorReading>;
   commands: DeviceCommand[];
   device?: Device | null;
+  scaleProfile?: HiveScaleProfile | null;
   onLoadHistory: (period: ChartPeriod) => Promise<void>;
   onDeleteHive: () => void | Promise<void>;
   onDeleteDevice?: () => void | Promise<void>;
@@ -898,6 +901,7 @@ export function HiveDetail({ hive, state, latestByMetric, commands, device, onLo
     comment?: string;
     metadata?: Record<string, unknown>;
   }) => Promise<HiveTareEvent>;
+  onRemoveSuperTare: (superIndex?: number) => Promise<HiveTareEvent>;
   onClose: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<DetailTab>("overview");
@@ -953,6 +957,7 @@ export function HiveDetail({ hive, state, latestByMetric, commands, device, onLo
             <ReadingMini title="Батарея" reading={latestByMetric.battery_percent} />
             <ReadingMini title="RSSI" reading={latestByMetric.rssi} />
           </div>
+          <ScaleProfilePanel profile={scaleProfile} onRemoveSuperTare={onRemoveSuperTare} />
           <DeviceCommandPanel commands={commands} device={device} disabled={!onSendCommand || state.loading} onSendCommand={onSendCommand} onLoadDevice={onLoadDevice} onLoadCommands={onLoadCommands} onSaveTare={onSaveTare} />
         </>
       )}
@@ -982,6 +987,40 @@ export function HiveDetail({ hive, state, latestByMetric, commands, device, onLo
         <button className="danger-action" type="button" onClick={onDeleteHive}>Удалить улей</button>
       </div>
     </aside>
+  );
+}
+
+function ScaleProfilePanel({ profile, onRemoveSuperTare }: { profile?: HiveScaleProfile | null; onRemoveSuperTare: (superIndex?: number) => Promise<HiveTareEvent> }) {
+  const [busy, setBusy] = useState(false);
+  const supers = normalizeSuperTares(profile?.super_tares);
+  async function removeLatest() {
+    if (busy || supers.length === 0) return;
+    setBusy(true);
+    try {
+      await onRemoveSuperTare(supers[supers.length - 1].index);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section className="scale-profile-panel">
+      <div className="detail-section-title">
+        <h3>Профиль веса</h3>
+        <span>{profile ? `Активная тара ${formatNumber(profile.active_tare_kg)} кг` : "тара не задана"}</span>
+      </div>
+      <div className="scale-profile-grid">
+        <ReadingBox label="Тара улья" value={profile?.empty_hive_tare_kg != null ? `${formatNumber(profile.empty_hive_tare_kg)} кг` : "-"} />
+        <ReadingBox label="Магазинов" value={supers.length} />
+      </div>
+      {supers.length > 0 ? (
+        <div className="scale-super-list">
+          {supers.map((item) => (
+            <span key={item.index}>#{item.index}: {formatNumber(item.measured_raw_weight_kg)} кг</span>
+          ))}
+        </div>
+      ) : <p className="command-note">Тары магазинов пока нет.</p>}
+      {supers.length > 0 && <button className="small-danger" type="button" disabled={busy} onClick={() => void removeLatest()}>{busy ? "Снимаем..." : "Снять последний магазин"}</button>}
+    </section>
   );
 }
 
@@ -1953,6 +1992,28 @@ export function formatValue(reading: SensorReading) {
 
 export function valueOnly(reading: SensorReading) {
   return Math.abs(reading.value) >= 100 ? reading.value.toFixed(0) : reading.value.toFixed(2).replace(".", ",");
+}
+
+function formatNumber(value: number) {
+  return Math.abs(value) >= 100 ? value.toFixed(0) : value.toFixed(2).replace(".", ",");
+}
+
+function normalizeSuperTares(value: unknown): HiveSuperTare[] {
+  if (!Array.isArray(value)) return [];
+  const result: HiveSuperTare[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Record<string, unknown>;
+    const index = Number(record.index);
+    const measured = Number(record.measured_raw_weight_kg);
+    if (!Number.isFinite(index) || !Number.isFinite(measured)) continue;
+    result.push({
+      index,
+      measured_raw_weight_kg: measured,
+      measured_at: typeof record.measured_at === "string" ? record.measured_at : undefined
+    });
+  }
+  return result.sort((a, b) => a.index - b.index);
 }
 
 export function formatSigned(value: number, unit: string) {

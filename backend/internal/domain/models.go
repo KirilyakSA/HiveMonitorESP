@@ -136,6 +136,12 @@ type SaveHiveTareInput struct {
 	Metadata            json.RawMessage `json:"metadata"`
 }
 
+type RemoveHiveSuperInput struct {
+	SuperIndex *int            `json:"super_index,omitempty"`
+	Comment    string          `json:"comment"`
+	Metadata   json.RawMessage `json:"metadata"`
+}
+
 type DeviceEvent struct {
 	ID           string    `json:"id"`
 	DeviceID     *string   `json:"device_id,omitempty"`

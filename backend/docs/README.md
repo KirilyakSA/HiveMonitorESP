@@ -136,6 +136,7 @@ GET  /hives/{hiveID}/telemetry/history
 GET  /hives/{hiveID}/events
 GET  /hives/{hiveID}/scale/profile
 POST /hives/{hiveID}/scale/tare
+POST /hives/{hiveID}/scale/supers/remove
 DELETE /hives/{hiveID}
 ```
 
@@ -157,6 +158,8 @@ Device command MVP / MVP команд устройств:
   EN: for backend tare, the device still participates in the process: the UI keeps it awake with `hold_config_session`, asks the user to prepare the hive/super, sends `capture_weight` for a one-off raw measurement and closes the session with `finish_config_session`; tare storage happens only in the backend.
 - RU: `POST /hives/{hiveID}/scale/tare` сохраняет тару в `hive_scale_profiles`, пишет историю в `hive_tare_events`, а telemetry endpoints возвращают `weight` уже как полезный вес; оригинальный сырой вес доступен в `raw_value`.
   EN: `POST /hives/{hiveID}/scale/tare` stores tare in `hive_scale_profiles`, records history in `hive_tare_events`, and telemetry endpoints return `weight` as useful/net weight; the original raw weight is available in `raw_value`.
+- RU: `POST /hives/{hiveID}/scale/supers/remove` снимает последнюю или выбранную тару магазина и возвращает активный baseline к предыдущему магазину или таре пустого улья.
+  EN: `POST /hives/{hiveID}/scale/supers/remove` removes the latest or selected super tare and restores the active baseline to the previous super or empty-hive tare.
 - RU: публикация идет в `apiaries/{apiaryId}/devices/{deviceId}/commands` и legacy `hives/{deviceId}/commands`.
   EN: publishing goes to `apiaries/{apiaryId}/devices/{deviceId}/commands` and legacy `hives/{deviceId}/commands`.
 - RU: firmware публикует `commandStatus` с `commandId`; backend status ingestion переводит команду в `acknowledged`/`failed` и сохраняет `result`, например `raw_weight_kg` для `capture_weight`. `expired` остается следующим worker-инкрементом.

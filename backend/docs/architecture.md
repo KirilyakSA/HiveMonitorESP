@@ -1156,6 +1156,7 @@ GET /apiaries/{id}/events
 GET /hives/{id}/events
 GET /hives/{id}/scale/profile
 POST /hives/{id}/scale/tare
+POST /hives/{id}/scale/supers/remove
 DELETE /hives/{id}
 DELETE /apiaries/{id}
 ```

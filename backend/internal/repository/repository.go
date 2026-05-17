@@ -1380,6 +1380,100 @@ func (r *Repository) SaveHiveTare(ctx context.Context, userID, hiveID string, in
 	return event, tx.Commit(ctx)
 }
 
+func (r *Repository) RemoveHiveSuperTare(ctx context.Context, userID, hiveID string, input domain.RemoveHiveSuperInput) (*domain.HiveTareEvent, error) {
+	if len(input.Metadata) == 0 {
+		input.Metadata = json.RawMessage(`{}`)
+	}
+	if !json.Valid(input.Metadata) {
+		return nil, fmt.Errorf("%w: metadata must be valid JSON", ErrInvalidInput)
+	}
+
+	var apiaryID string
+	if err := r.db.QueryRow(ctx, `select apiary_id from hives where id = $1`, hiveID).Scan(&apiaryID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotFound
+	}
+
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	var previousActive float64
+	var emptyHiveTare *float64
+	var superTares []byte
+	if err := tx.QueryRow(ctx, `
+		select active_tare_kg, empty_hive_tare_kg, super_tares
+		from hive_scale_profiles
+		where hive_id = $1
+	`, hiveID).Scan(&previousActive, &emptyHiveTare, &superTares); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("%w: scale profile is not initialized", ErrInvalidInput)
+		}
+		return nil, err
+	}
+
+	removed, nextSuperTares, err := removeSuperTare(superTares, input.SuperIndex)
+	if err != nil {
+		return nil, err
+	}
+	nextActive := 0.0
+	if len(nextSuperTares) > 0 {
+		nextActive = latestSuperTareWeight(nextSuperTares)
+	}
+	if nextActive == 0 && emptyHiveTare != nil {
+		nextActive = *emptyHiveTare
+	}
+
+	_, err = tx.Exec(ctx, `
+		update hive_scale_profiles
+		set active_tare_kg = $2,
+			super_tares = $3,
+			updated_by = $4,
+			updated_at = now()
+		where hive_id = $1
+	`, hiveID, nextActive, string(nextSuperTares), userID)
+	if err != nil {
+		return nil, err
+	}
+
+	metadata := input.Metadata
+	if string(metadata) == "{}" {
+		nextMetadata, _ := json.Marshal(map[string]any{
+			"removed_super_index": removed.Index,
+			"operation":           "remove_super",
+		})
+		metadata = nextMetadata
+	}
+	tareKind := "super_removed"
+	row := tx.QueryRow(ctx, `
+		insert into hive_tare_events (
+			hive_id, apiary_id, tare_kind, super_index, measured_raw_weight_kg,
+			previous_active_tare_kg, new_active_tare_kg, comment, metadata, created_by
+		)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)
+		returning id, hive_id, apiary_id, device_id, command_id, tare_kind, super_index,
+			measured_raw_weight_kg, previous_active_tare_kg, new_active_tare_kg,
+			comment, metadata, created_by, created_at
+	`, hiveID, apiaryID, tareKind, removed.Index, removed.MeasuredRawWeightKG,
+		previousActive, nextActive, strings.TrimSpace(input.Comment), string(metadata), userID)
+	event, err := scanHiveTareEvent(row)
+	if err != nil {
+		return nil, err
+	}
+	return event, tx.Commit(ctx)
+}
+
 func (r *Repository) EventsForApiary(ctx context.Context, userID, apiaryID string, limit int) ([]domain.DeviceEvent, error) {
 	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
 	if err != nil {
@@ -1815,10 +1909,8 @@ func scanHiveTareEvent(row pgx.Row) (*domain.HiveTareEvent, error) {
 }
 
 func nextSuperIndex(data []byte) int {
-	var items []struct {
-		Index int `json:"index"`
-	}
-	if err := json.Unmarshal(data, &items); err != nil {
+	items, err := decodeSuperTares(data)
+	if err != nil {
 		return 1
 	}
 	next := 1
@@ -1830,17 +1922,27 @@ func nextSuperIndex(data []byte) int {
 	return next
 }
 
-func upsertSuperTare(data []byte, index int, weight float64, measuredAt time.Time) (json.RawMessage, error) {
-	type superTare struct {
-		Index               int       `json:"index"`
-		MeasuredRawWeightKG float64   `json:"measured_raw_weight_kg"`
-		MeasuredAt          time.Time `json:"measured_at"`
+type hiveSuperTare struct {
+	Index               int       `json:"index"`
+	MeasuredRawWeightKG float64   `json:"measured_raw_weight_kg"`
+	MeasuredAt          time.Time `json:"measured_at"`
+}
+
+func decodeSuperTares(data []byte) ([]hiveSuperTare, error) {
+	var items []hiveSuperTare
+	if len(data) == 0 {
+		return items, nil
 	}
-	var items []superTare
-	if len(data) > 0 {
-		if err := json.Unmarshal(data, &items); err != nil {
-			return nil, err
-		}
+	if err := json.Unmarshal(data, &items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func upsertSuperTare(data []byte, index int, weight float64, measuredAt time.Time) (json.RawMessage, error) {
+	items, err := decodeSuperTares(data)
+	if err != nil {
+		return nil, err
 	}
 	replaced := false
 	for i := range items {
@@ -1852,9 +1954,59 @@ func upsertSuperTare(data []byte, index int, weight float64, measuredAt time.Tim
 		}
 	}
 	if !replaced {
-		items = append(items, superTare{Index: index, MeasuredRawWeightKG: weight, MeasuredAt: measuredAt})
+		items = append(items, hiveSuperTare{Index: index, MeasuredRawWeightKG: weight, MeasuredAt: measuredAt})
 	}
 	return json.Marshal(items)
+}
+
+func removeSuperTare(data []byte, index *int) (hiveSuperTare, json.RawMessage, error) {
+	items, err := decodeSuperTares(data)
+	if err != nil {
+		return hiveSuperTare{}, nil, err
+	}
+	if len(items) == 0 {
+		return hiveSuperTare{}, nil, fmt.Errorf("%w: no super tare to remove", ErrInvalidInput)
+	}
+	target := 0
+	if index != nil && *index > 0 {
+		target = *index
+	} else {
+		for _, item := range items {
+			if item.Index > target {
+				target = item.Index
+			}
+		}
+	}
+	next := make([]hiveSuperTare, 0, len(items)-1)
+	var removed hiveSuperTare
+	found := false
+	for _, item := range items {
+		if item.Index == target {
+			removed = item
+			found = true
+			continue
+		}
+		next = append(next, item)
+	}
+	if !found {
+		return hiveSuperTare{}, nil, fmt.Errorf("%w: super tare not found", ErrInvalidInput)
+	}
+	body, err := json.Marshal(next)
+	return removed, body, err
+}
+
+func latestSuperTareWeight(data []byte) float64 {
+	items, err := decodeSuperTares(data)
+	if err != nil {
+		return 0
+	}
+	var latest hiveSuperTare
+	for _, item := range items {
+		if item.Index >= latest.Index {
+			latest = item
+		}
+	}
+	return latest.MeasuredRawWeightKG
 }
 
 func scanDeviceEvents(rows pgx.Rows) ([]domain.DeviceEvent, error) {

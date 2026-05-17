@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiClient } from "./api";
-import type { AdviceItem, Apiary, ApiaryTask, Device, DeviceCommand, DeviceEvent, Hive, HiveTareEvent, Organization, SensorReading, User } from "./api";
+import type { AdviceItem, Apiary, ApiaryTask, Device, DeviceCommand, DeviceEvent, Hive, HiveScaleProfile, HiveTareEvent, Organization, SensorReading, User } from "./api";
 import {
   AlertsPanel,
   ApiariesScreen,
@@ -41,6 +41,7 @@ export function App() {
   const [apiaryEvents, setApiaryEvents] = useState<DeviceEvent[]>([]);
   const [deviceCommands, setDeviceCommands] = useState<DeviceCommand[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
+  const [selectedScaleProfile, setSelectedScaleProfile] = useState<HiveScaleProfile | null>(null);
   const [apiaryAdvice, setApiaryAdvice] = useState<AdviceItem[]>([]);
   const [apiaryTasks, setApiaryTasks] = useState<ApiaryTask[]>([]);
   const [includeHiddenAdvice, setIncludeHiddenAdvice] = useState(false);
@@ -142,6 +143,7 @@ export function App() {
   useEffect(() => {
     if (!selectedHiveId) {
       setHiveState({ latest: [], history: [], events: [], loading: false });
+      setSelectedScaleProfile(null);
       return;
     }
     void loadHiveData(selectedHiveId, "1d");
@@ -189,7 +191,9 @@ export function App() {
         loadTelemetryHistory(hiveId, period),
         client.hiveEvents(hiveId)
       ]);
+      const profile = await client.hiveScaleProfile(hiveId).catch(() => null);
       setHiveState({ latest, history, events, loading: false });
+      setSelectedScaleProfile(profile);
       setHiveSnapshots((state) => ({ ...state, [hiveId]: latest }));
       setHiveHistories((state) => ({ ...state, [hiveId]: history }));
     } catch (error) {
@@ -365,6 +369,19 @@ export function App() {
     return event;
   }
 
+  async function removeHiveSuperTare(superIndex?: number) {
+    if (!selectedHiveId) throw new Error("Улей не выбран");
+    const event = await client.removeHiveSuperTare(selectedHiveId, {
+      super_index: superIndex,
+      comment: "Снятие магазина",
+      metadata: { source: "web" }
+    });
+    setMessage("Магазин снят, активная тара возвращена к предыдущему уровню");
+    await loadHiveData(selectedHiveId, comparisonPeriod);
+    if (selectedApiaryId) await loadApiaryData(selectedApiaryId, comparisonPeriod);
+    return event;
+  }
+
   async function loadApiarySummaries(items: Apiary[]) {
     try {
       const pairs = await Promise.all(
@@ -514,6 +531,7 @@ export function App() {
           latestByMetric={latestByMetric}
           commands={deviceCommands}
           device={selectedDevice}
+          scaleProfile={selectedScaleProfile}
           onLoadHistory={(period) => selectedHiveId ? loadHiveHistory(selectedHiveId, period) : Promise.resolve()}
           onDeleteHive={() => deleteHive(selectedHive)}
           onDeleteDevice={selectedHive.assigned_device_id ? () => deleteDevice(selectedHive.assigned_device_id!) : undefined}
@@ -521,6 +539,7 @@ export function App() {
           onLoadDevice={selectedHive.assigned_device_id ? () => loadDevice(selectedHive.assigned_device_id!) : undefined}
           onLoadCommands={selectedHive.assigned_device_id ? () => loadDeviceCommands(selectedHive.assigned_device_id!) : undefined}
           onSaveTare={saveHiveTare}
+          onRemoveSuperTare={removeHiveSuperTare}
           onClose={() => setSelectedHiveId("")}
         />
       )}

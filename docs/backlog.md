@@ -108,6 +108,9 @@ EN: This document captures the nearest project backlog. GitHub Issues remain the
 - Firmware/Backend/Web:
   - RU: DONE MVP - firmware ack/result для `capture_weight`: `commandStatus.commandId`, `result.raw_weight_kg`, backend update `device_commands`, polling результата в web-мастере. Следующий шаг - убрать ручной fallback после обновления парка устройств.
   - EN: DONE MVP - firmware ack/result for `capture_weight`: `commandStatus.commandId`, `result.raw_weight_kg`, backend `device_commands` update, web wizard result polling. Next step - remove manual fallback after device fleet upgrade.
+- Backend/Web:
+  - RU: DONE MVP - снятие последнего/выбранного магазина: активная тара возвращается к предыдущему магазину или таре пустого улья, профиль веса показывается в панели улья.
+  - EN: DONE MVP - remove latest/selected super: active tare falls back to the previous super or empty-hive tare, and the hive drawer shows the weight profile.
 - AI/Backend/Web/Mobile: [#42](https://github.com/KirilyakSA/HiveMonitorESP/issues/42)
   - RU: анализ звука ульев: аудио-признаки, паттерны, аномалии и объяснимые подсказки.
   - EN: hive audio analysis: audio features, patterns, anomalies and explainable recommendations.
