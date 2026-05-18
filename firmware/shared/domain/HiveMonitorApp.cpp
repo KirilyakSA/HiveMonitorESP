@@ -65,8 +65,11 @@ void HiveMonitorApp::loop() {
     timeService_.loop(configManager_.data());
     mqttService_.loop(configManager_.data());
     if (configSessionActive_ && configSessionExpiresMs_ != 0 && (int32_t)(millis() - configSessionExpiresMs_) >= 0) {
+        Serial.println("Configuration session expired");
         configSessionActive_ = false;
         configSessionExpiresMs_ = 0;
+        enterDeepSleepIfEnabled();
+        return;
     }
 
     if (mqttService_.connected()) {
@@ -348,6 +351,10 @@ void HiveMonitorApp::handleMqttMessage(const String& topic, const String& payloa
     if (ok && (command == "restart" || command == "reboot")) {
         delay(500);
         platformRestart();
+    }
+    if (ok && command == "finish_config_session") {
+        delay(500);
+        enterDeepSleepIfEnabled();
     }
 }
 
