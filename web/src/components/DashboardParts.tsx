@@ -1352,9 +1352,9 @@ function TareWizardContent({
     return (
       <div className="command-result">
         <strong>{measuredWeight === null ? "Ожидаем результат замера от устройства" : `${measuredWeight.toFixed(2).replace(".", ",")} кг`}</strong>
-        <span>{measuredWeight === null ? "Firmware ack/result для capture_weight еще не реализован. Для проверки MVP можно временно ввести сырой вес вручную." : "Это значение будет сохранено в scale_profile и будет вычитаться из сырого веса."}</span>
+        <span>{measuredWeight === null ? "Обычно вес придет автоматически через commandStatus. Ручной ввод оставлен как fallback для старых прошивок или проверки без устройства." : "Это значение будет сохранено в scale_profile и будет вычитаться из сырого веса."}</span>
         <label>
-          Сырой вес, кг
+          Сырой вес, кг (fallback)
           <input value={manualWeight} onChange={(event) => onManualWeightChange(event.target.value)} placeholder="Например 38,75" inputMode="decimal" />
         </label>
       </div>

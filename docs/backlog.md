@@ -103,8 +103,11 @@ EN: This document captures the nearest project backlog. GitHub Issues remain the
   - RU: `scale_profile` и история тарирования: тара пустого улья сбрасывает отображаемый вес в ноль; тары магазинов 2/3/4... добавляются/снимаются слоями с возвратом к предыдущей активной таре.
   - EN: `scale_profile` and tare history: empty-hive tare resets displayed weight to zero; super tares 2/3/4... are added/removed in layers with fallback to the previous active tare.
 - Backend/Web:
-  - RU: DONE MVP - `hive_scale_profiles`, `hive_tare_events`, API сохранения тары и пересчет `weight` в telemetry endpoints. Следующий шаг - reset/remove super tare и firmware ack/result без ручного fallback.
-  - EN: DONE MVP - `hive_scale_profiles`, `hive_tare_events`, tare save API and `weight` recalculation in telemetry endpoints. Next step - reset/remove super tare and firmware ack/result without manual fallback.
+  - RU: DONE MVP - `hive_scale_profiles`, `hive_tare_events`, API сохранения тары, пересчет `weight` в telemetry endpoints, снятие магазина и firmware ack/result. Следующий шаг - убрать ручной fallback после обновления парка устройств.
+  - EN: DONE MVP - `hive_scale_profiles`, `hive_tare_events`, tare save API, `weight` recalculation in telemetry endpoints, super removal and firmware ack/result. Next step - remove manual fallback after device fleet upgrade.
+- Backend/Web/Firmware:
+  - RU: DONE MVP - снятие магазина, firmware ack/result для `capture_weight` и E2E UI-сценарии тары улья/магазина. Ручной fallback raw-веса временно оставлен для старых прошивок.
+  - EN: DONE MVP - super removal, firmware ack/result for `capture_weight`, and E2E UI flows for hive/super tare. Manual raw-weight fallback remains temporarily for older firmware.
 - Firmware/Backend/Web:
   - RU: DONE MVP - firmware ack/result для `capture_weight`: `commandStatus.commandId`, `result.raw_weight_kg`, backend update `device_commands`, polling результата в web-мастере. Следующий шаг - убрать ручной fallback после обновления парка устройств.
   - EN: DONE MVP - firmware ack/result for `capture_weight`: `commandStatus.commandId`, `result.raw_weight_kg`, backend `device_commands` update, web wizard result polling. Next step - remove manual fallback after device fleet upgrade.

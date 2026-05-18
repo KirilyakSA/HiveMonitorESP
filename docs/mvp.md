@@ -103,10 +103,10 @@ Web: login/register, create organization/apiary/hive, assign device, view teleme
 
 - Legacy mode `hives/{deviceId}/...` остается только для совместимости и dev/MVP.
 - Для production provisioning нужно задавать `apiaryId` в локальной конфигурации firmware и использовать topics `apiaries/{apiary_id}/devices/{device_id}/...`.
-- Backend отправляет MQTT-команды устройствам через `device_commands`; firmware ack/result flow еще не реализован.
+- Backend отправляет MQTT-команды устройствам через `device_commands`; firmware публикует `commandStatus` с `commandId`, backend сохраняет ack/result и worker переводит просроченные команды в `expired`.
 - Web отправляет базовые команды обслуживания и мастер backend-тары. Firmware публикует ack/result для `capture_weight`; ручной fallback raw-веса в dev UI остается как страховка для старых прошивок.
 - Alerts, системные теги, события от alerts и уведомления еще не реализованы.
-- Проверка пропущенных передач еще не реализована.
+- Проверка пропущенных передач реализована в worker MVP через `missed_telemetry_count`; уведомления по ним еще впереди.
 - Tasks/reminders еще не реализованы.
 - OTA через backend еще не реализована.
 - Weather provider и метеостанции еще не реализованы.

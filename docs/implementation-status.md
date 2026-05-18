@@ -92,7 +92,7 @@ EN: After the project review, mismatches were moved to GitHub Issues with the hi
 
 ### Частично совместимо
 
-- Backend command API MVP уже создает `device_commands` и публикует MQTT-команды в apiary-aware topic с legacy fallback. Firmware-side ack/result и полноценный command-service остаются следующим инкрементом.
+- Backend command API MVP уже создает `device_commands` и публикует MQTT-команды в apiary-aware topic с legacy fallback. Firmware уже публикует `commandStatus` с `commandId`, а backend сохраняет ack/result и переводит просроченные команды в `expired`. Полноценный command-service с расширенными workflows остается следующим крупным инкрементом.
 
 ### Устаревшее в старой документации
 
