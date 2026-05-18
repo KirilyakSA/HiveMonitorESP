@@ -162,8 +162,10 @@ Device command MVP / MVP команд устройств:
   EN: `POST /hives/{hiveID}/scale/supers/remove` removes the latest or selected super tare and restores the active baseline to the previous super or empty-hive tare.
 - RU: публикация идет в `apiaries/{apiaryId}/devices/{deviceId}/commands` и legacy `hives/{deviceId}/commands`.
   EN: publishing goes to `apiaries/{apiaryId}/devices/{deviceId}/commands` and legacy `hives/{deviceId}/commands`.
-- RU: firmware публикует `commandStatus` с `commandId`; backend status ingestion переводит команду в `acknowledged`/`failed` и сохраняет `result`, например `raw_weight_kg` для `capture_weight`. `expired` остается следующим worker-инкрементом.
-  EN: firmware publishes `commandStatus` with `commandId`; backend status ingestion marks the command as `acknowledged`/`failed` and stores `result`, for example `raw_weight_kg` for `capture_weight`. `expired` remains a future worker increment.
+- RU: firmware публикует `commandStatus` с `commandId`; backend status ingestion переводит команду в `acknowledged`/`failed` и сохраняет `result`, например `raw_weight_kg` для `capture_weight`.
+  EN: firmware publishes `commandStatus` with `commandId`; backend status ingestion marks the command as `acknowledged`/`failed` and stores `result`, for example `raw_weight_kg` for `capture_weight`.
+- RU: `worker-service` переводит просроченные команды в статус `expired`, если устройство не подтвердило их до `expires_at`.
+  EN: `worker-service` marks commands as `expired` when the device does not acknowledge them before `expires_at`.
 
 ## Календарь работ и советы
 

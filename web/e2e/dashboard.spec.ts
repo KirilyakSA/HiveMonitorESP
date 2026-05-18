@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { demoEmail, demoPassword, login, selectNorthApiary } from "./support";
+import { demoEmail, demoPassword, login, queryDatabaseJSON, runDatabaseSQL, selectNorthApiary } from "./support";
 
 test.describe("HiveMonitor dashboard", () => {
   test("switches auth modes and validates the login form", async ({ page }) => {
@@ -65,6 +65,26 @@ test.describe("HiveMonitor dashboard", () => {
     await expect(page.getByRole("tab", { name: "Графики" })).toBeVisible();
     await page.getByRole("button", { name: "Закрыть карточку улья" }).click();
     await expect(page.locator(".hive-detail")).toBeHidden();
+  });
+
+  test("shows expired device command status in the hive drawer", async ({ page }) => {
+    cleanupExpiredCommandFixture();
+    const fixture = seedExpiredCommandFixture();
+
+    try {
+      await login(page);
+      await selectNorthApiary(page);
+
+      await page.locator(".hive-table-row").filter({ hasText: fixture.hive_name }).first().click();
+      const detail = page.locator(".hive-detail");
+      const expiredStatus = detail.locator(".command-status.expired");
+      await expect(detail).toBeVisible();
+      await expect(expiredStatus).toBeVisible();
+      await expect(expiredStatus.getByText(/истекла/)).toBeVisible();
+      await expect(expiredStatus.getByText(/Command expired before device acknowledged it/)).toBeVisible();
+    } finally {
+      cleanupExpiredCommandFixture();
+    }
   });
 
   test("switches hive drawer tabs and chart periods", async ({ page }) => {
@@ -208,3 +228,41 @@ test.describe("HiveMonitor dashboard", () => {
     await expect(page.getByRole("heading", { name: "Выберите улей для устройства" })).toBeHidden();
   });
 });
+
+function seedExpiredCommandFixture() {
+  return queryDatabaseJSON<{ hive_name: string }>(`
+with target as (
+  select h.id as hive_id, h.name as hive_name, h.apiary_id, d.id as device_id, d.device_id as device_public_id
+  from hives h
+  join device_assignments da on da.hive_id = h.id and da.unassigned_at is null
+  join devices d on d.id = da.device_id
+  where h.apiary_id = '33333333-3333-3333-3333-333333333331'::uuid
+  order by h.created_at desc
+  limit 1
+),
+inserted as (
+  insert into device_commands (
+    apiary_id, device_id, device_public_id, command, payload, status,
+    expires_at, error_message, created_at, updated_at
+  )
+  select apiary_id, device_id, device_public_id, 'config_update',
+    '{"source":"e2e-expired-command-status"}'::jsonb,
+    'expired',
+    now() - interval '5 minutes',
+    'Command expired before device acknowledged it',
+    now() - interval '10 minutes',
+    now() - interval '5 minutes'
+  from target
+  returning id
+)
+select json_build_object('hive_name', target.hive_name)
+from target, inserted;
+`);
+}
+
+function cleanupExpiredCommandFixture() {
+  runDatabaseSQL(`
+delete from device_commands
+where payload->>'source' = 'e2e-expired-command-status';
+`);
+}

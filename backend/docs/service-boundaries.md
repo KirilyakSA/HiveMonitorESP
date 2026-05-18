@@ -57,6 +57,8 @@ EN: `worker-service` is the first shared background service. It does not serve H
   EN: updates `apiary_tasks.status` to `due` / `overdue`.
 - RU: пересчитывает `devices.missed_telemetry_count` по `expected_next_telemetry_at`.
   EN: recalculates `devices.missed_telemetry_count` using `expected_next_telemetry_at`.
+- RU: переводит просроченные `device_commands` из `created` / `published` в `expired`.
+  EN: marks expired `device_commands` from `created` / `published` as `expired`.
 - RU: публикует `worker.tick.completed` в NATS.
   EN: publishes `worker.tick.completed` to NATS.
 

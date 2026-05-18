@@ -1085,6 +1085,8 @@ function DeviceCommandPanel({
         <div className={`command-status ${latest.status}`}>
           <strong>{commandLabel(latest.command)}</strong>
           <span>{commandStatusText(latest)}</span>
+          <small>{commandTimingText(latest)}</small>
+          {commandResultText(latest) ? <small>{commandResultText(latest)}</small> : null}
           {latest.error_message ? <em>{latest.error_message}</em> : null}
         </div>
       ) : (
@@ -1161,7 +1163,10 @@ function DeviceCommandModal({
           if (value !== null) {
             setMeasuredWeight(value);
             setManualWeight(String(value));
+            return;
           }
+          const commandError = commandOutcomeError(command);
+          if (commandError) setError(commandError);
         })
         .catch(() => undefined);
     }, 2000);
@@ -1228,6 +1233,8 @@ function DeviceCommandModal({
         purpose: action.tareKind === "super" ? "super_tare" : "hive_tare"
       });
       if (command?.id) setCaptureCommandId(command.id);
+      const commandError = commandOutcomeError(command);
+      if (commandError) setError(commandError);
       const value = weightFromCommand(command);
       if (value !== null) {
         setMeasuredWeight(value);
@@ -1378,6 +1385,13 @@ function weightFromCommand(command: DeviceCommand | void) {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function commandOutcomeError(command: DeviceCommand | void) {
+  if (!command) return "";
+  if (command.status === "expired") return "Команда истекла: устройство не подтвердило выполнение до таймаута.";
+  if (command.status === "failed") return command.error_message || "Устройство вернуло ошибку выполнения команды.";
+  return "";
+}
+
 function commandLabel(command: string) {
   switch (command) {
   case "reboot":
@@ -1404,9 +1418,9 @@ function commandStatusText(command: DeviceCommand) {
   const time = formatDate(command.updated_at);
   switch (command.status) {
   case "created":
-    return `создана ${time}`;
+    return `создана ${time}, ожидает публикации`;
   case "published":
-    return `отправлена ${time}`;
+    return `отправлена ${time}, ожидает подтверждения`;
   case "acknowledged":
     return `подтверждена ${formatDate(command.acknowledged_at || command.updated_at)}`;
   case "failed":
@@ -1416,6 +1430,19 @@ function commandStatusText(command: DeviceCommand) {
   default:
     return `${command.status} ${time}`;
   }
+}
+
+function commandTimingText(command: DeviceCommand) {
+  if (command.status === "acknowledged" && command.acknowledged_at) return `Ответ: ${formatDate(command.acknowledged_at)}`;
+  if (command.status === "expired") return `Истекла: ${formatDate(command.expires_at)}`;
+  if (command.status === "created" || command.status === "published") return `Таймаут: ${formatDate(command.expires_at)}`;
+  return `Обновлено: ${formatDate(command.updated_at)}`;
+}
+
+function commandResultText(command: DeviceCommand) {
+  const weight = weightFromCommand(command);
+  if (weight !== null) return `Результат: ${formatNumber(weight)} кг raw`;
+  return "";
 }
 
 function DetailTabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {

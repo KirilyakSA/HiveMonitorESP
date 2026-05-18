@@ -20,10 +20,10 @@ EN: Goal - allow web/mobile clients to send device commands through the backend.
   EN: DONE MVP - HTTP API to create and list device commands.
 - RU: DONE MVP - публикация MQTT command topic: `apiaries/{apiaryId}/devices/{deviceId}/commands`; legacy fallback `hives/{deviceId}/commands`.
   EN: DONE MVP - MQTT command topic publishing: `apiaries/{apiaryId}/devices/{deviceId}/commands`; legacy fallback `hives/{deviceId}/commands`.
-- RU: DONE MVP - статусы команды: created, published, failed; статусы acknowledged/expired заложены в модель.
-  EN: DONE MVP - command statuses: created, published, failed; acknowledged/expired are modeled.
-- RU: сохранение результата/ack от firmware, когда firmware начнет его публиковать.
-  EN: store firmware result/ack once firmware starts publishing it.
+- RU: DONE MVP - статусы команды: created, published, failed, acknowledged, expired.
+  EN: DONE MVP - command statuses: created, published, failed, acknowledged, expired.
+- RU: DONE MVP - сохранение результата/ack от firmware через `commandStatus.commandId`.
+  EN: DONE MVP - store firmware result/ack through `commandStatus.commandId`.
 - RU: firmware должна перед deep sleep проверять входящие backend-команды `reboot`, `firmware_update`, `config_update`, `hold_config_session`, `capture_weight`, `finish_config_session`; firmware tare/calibration весов выполняются в локальном web-интерфейсе устройства.
   EN: firmware must check incoming backend commands `reboot`, `firmware_update`, `config_update`, `hold_config_session`, `capture_weight`, `finish_config_session` before deep sleep; firmware scale tare/calibration are performed in the local device web UI.
 

@@ -633,6 +633,24 @@ func (r *Repository) MarkDeviceCommandAcknowledged(ctx context.Context, commandI
 	return scanDeviceCommand(row)
 }
 
+func (r *Repository) ExpireDeviceCommands(ctx context.Context, now time.Time) (int64, error) {
+	tag, err := r.db.Exec(ctx, `
+		update device_commands
+		set status = 'expired',
+			error_message = case
+				when error_message = '' then 'Command expired before device acknowledged it'
+				else error_message
+			end,
+			updated_at = $1
+		where status in ('created', 'published')
+			and expires_at <= $1
+	`, now)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 func (r *Repository) ListDeviceCommands(ctx context.Context, userID, apiaryID, deviceUUID string, limit int) ([]domain.DeviceCommand, error) {
 	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
 	if err != nil {

@@ -60,10 +60,21 @@ func (s *Service) tick(ctx context.Context) error {
 		return err
 	}
 
-	s.logger.Info("worker tick completed", "task_rows", taskRows, "missed_telemetry_rows", missedRows)
+	expiredCommandRows, err := s.repo.ExpireDeviceCommands(ctx, now)
+	if err != nil {
+		return err
+	}
+
+	s.logger.Info(
+		"worker tick completed",
+		"task_rows", taskRows,
+		"missed_telemetry_rows", missedRows,
+		"expired_command_rows", expiredCommandRows,
+	)
 	return s.bus.PublishJSON("worker.tick.completed", map[string]any{
 		"task_rows":             taskRows,
 		"missed_telemetry_rows": missedRows,
+		"expired_command_rows":  expiredCommandRows,
 		"checked_at":            now,
 	})
 }

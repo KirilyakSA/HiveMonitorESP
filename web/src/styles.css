@@ -1822,13 +1822,23 @@ a {
   color: #64748b;
 }
 
+.command-status small {
+  color: #64748b;
+  line-height: 1.35;
+}
+
 .command-status em {
   color: #b91c1c;
   font-style: normal;
   overflow-wrap: anywhere;
 }
 
-.command-status.published,
+.command-status.created,
+.command-status.published {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
 .command-status.acknowledged {
   border-color: #bbf7d0;
   background: #f0fdf4;
