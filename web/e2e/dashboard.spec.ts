@@ -91,7 +91,10 @@ test.describe("HiveMonitor dashboard", () => {
     await login(page);
     await selectNorthApiary(page);
 
-    await page.locator(".hive-table-row").first().click();
+    const hiveRow = page.getByRole("button", { name: /Улей 1 - контрольный/ });
+    await expect(hiveRow).toBeVisible();
+    await hiveRow.scrollIntoViewIfNeeded();
+    await hiveRow.click();
     await expect(page.locator(".hive-detail")).toBeVisible();
 
     await page.getByRole("button", { name: "Открыть графики" }).click();

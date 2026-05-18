@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { login, queryDatabaseJSON, runDatabaseSQL } from "./support";
 
 const apiBase = process.env.HIVEMONITOR_E2E_API_BASE_URL ?? "http://127.0.0.1:8080";
@@ -112,7 +112,7 @@ where hive_id = '${hive.hive_id}'::uuid;
     await expect(modal.getByText("Выньте из улья все рамки")).toBeVisible();
     await modal.getByRole("button", { name: "Замерить вес" }).click();
 
-    const captureCommand = latestCaptureCommand(hive.device_id);
+    const captureCommand = latestCaptureCommand(hive.device_id, "hive_tare");
     acknowledgeCaptureCommand(captureCommand.command_id, tare);
     await expect(modal.getByText(`${tare.toFixed(2).replace(".", ",")} кг`)).toBeVisible({ timeout: 6000 });
     await modal.getByRole("button", { name: "Сохранить тару" }).click();
@@ -131,7 +131,69 @@ where hive_id = '${hive.hive_id}'::uuid;
     expect(dbProfile.active_tare_kg).toBeCloseTo(tare, 2);
     expect(dbProfile.empty_hive_tare_kg).toBeCloseTo(tare, 2);
   });
+
+  test("runs super tare wizard through UI and removes the latest super", async ({ page }) => {
+    cleanupTareFixture();
+    const hive = testHiveWithWeight();
+    const hiveTare = Number((hive.raw_weight - 8).toFixed(2));
+    const superTare = Number((hive.raw_weight - 3).toFixed(2));
+
+    await login(page);
+    await page.getByLabel("Пасека:").selectOption({ label: "Демо пасека Северная" });
+    await expect(page.getByRole("heading", { name: "Демо пасека Северная" })).toBeVisible();
+
+    await page.locator(".hive-table-row").filter({ hasText: hive.hive_name }).first().click();
+    const detail = page.locator(".hive-detail");
+    await expect(detail).toBeVisible();
+
+    await saveTareThroughWizard(page, detail, hive.device_id, "Тара улья", "hive_tare", hiveTare);
+    await expect(detail.getByText(/Активная тара/)).toBeVisible();
+
+    await saveTareThroughWizard(page, detail, hive.device_id, "Тара магазина", "super_tare", superTare);
+    await expect(detail.locator(".scale-super-list").getByText(`#1: ${superTare.toFixed(2).replace(".", ",")} кг`)).toBeVisible();
+
+    await detail.getByRole("button", { name: "Снять последний магазин" }).click();
+    await expect(detail.locator(".scale-super-list")).toBeHidden();
+    await expect(detail.getByText("Тары магазинов пока нет.")).toBeVisible();
+
+    const dbProfile = queryDatabaseJSON<{ active_tare_kg: number; empty_hive_tare_kg: number; super_count: number }>(`
+select json_build_object(
+  'active_tare_kg', active_tare_kg,
+  'empty_hive_tare_kg', empty_hive_tare_kg,
+  'super_count', jsonb_array_length(super_tares)
+)
+from hive_scale_profiles
+where hive_id = '${hive.hive_id}'::uuid;
+`);
+    expect(dbProfile.active_tare_kg).toBeCloseTo(hiveTare, 2);
+    expect(dbProfile.empty_hive_tare_kg).toBeCloseTo(hiveTare, 2);
+    expect(dbProfile.super_count).toBe(0);
+  });
 });
+
+async function saveTareThroughWizard(
+  page: Page,
+  detail: Locator,
+  deviceId: string,
+  actionName: "Тара улья" | "Тара магазина",
+  purpose: "hive_tare" | "super_tare",
+  rawWeight: number
+) {
+  await detail.getByRole("button", { name: actionName }).click();
+  const modal = page.getByRole("dialog", { name: actionName });
+  await expect(modal).toBeVisible();
+  markDeviceAwake(deviceId);
+  await expect(modal.getByText("Устройство активно")).toBeVisible({ timeout: 6000 });
+  await modal.getByRole("button", { name: "Далее" }).click();
+  await modal.getByRole("button", { name: "Замерить вес" }).click();
+  const captureCommand = latestCaptureCommand(deviceId, purpose);
+  acknowledgeCaptureCommand(captureCommand.command_id, rawWeight);
+  await expect(modal.getByText(`${rawWeight.toFixed(2).replace(".", ",")} кг`)).toBeVisible({ timeout: 6000 });
+  await modal.getByRole("button", { name: "Сохранить тару" }).click();
+  await expect(modal.getByText("Тара сохранена в backend")).toBeVisible();
+  await modal.getByRole("button", { name: "Да, отпустить устройство" }).click();
+  await expect(modal).toBeHidden();
+}
 
 function testHiveWithWeight() {
   return queryDatabaseJSON<HiveWithWeight>(`
@@ -166,13 +228,13 @@ where id = '${deviceId}'::uuid;
 `);
 }
 
-function latestCaptureCommand(deviceId: string) {
+function latestCaptureCommand(deviceId: string, purpose: "hive_tare" | "super_tare") {
   return queryDatabaseJSON<{ command_id: string }>(`
 select json_build_object('command_id', id::text)
 from device_commands
 where device_id = '${deviceId}'::uuid
   and command = 'capture_weight'
-  and payload->>'purpose' = 'hive_tare'
+  and payload->>'purpose' = '${purpose}'
 order by created_at desc
 limit 1;
 `);
