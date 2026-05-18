@@ -525,6 +525,109 @@ export function AlertsPanel({ events }: { events: DeviceEvent[] }) {
   );
 }
 
+type ProblemHiveItem = {
+  hive: Hive;
+  severity: "critical" | "warning" | "notice";
+  reasons: string[];
+  updatedAt?: string;
+};
+
+export function ProblemHivesPanel({
+  hives,
+  devices,
+  events,
+  snapshots,
+  onSelectHive
+}: {
+  hives: Hive[];
+  devices: Device[];
+  events: DeviceEvent[];
+  snapshots: HiveSnapshot;
+  onSelectHive: (id: string) => void;
+}) {
+  const deviceById = new globalThis.Map(devices.map((device) => [device.id, device]));
+  const alertHiveIds = new Set(events.filter(isAlertEvent).map((event) => event.hive_id).filter(Boolean));
+  const items = hives
+    .map((hive) => buildProblemHiveItem(hive, snapshots[hive.id] ?? [], deviceById.get(hive.assigned_device_id || ""), alertHiveIds.has(hive.id)))
+    .filter((item): item is ProblemHiveItem => Boolean(item))
+    .sort((a, b) => severityRank(a.severity) - severityRank(b.severity))
+    .slice(0, 5);
+
+  return (
+    <section className="panel-card problem-hives-panel">
+      <SectionHeader title="Проблемные ульи сегодня" action={items.length > 0 ? `${items.length} требуют внимания` : "все спокойно"} />
+      {items.length === 0 ? (
+        <EmptyInline text="Критичных отклонений по ульям пока нет." />
+      ) : (
+        <div className="problem-hive-list">
+          {items.map((item) => {
+            const latestWeight = indexReadings(snapshots[item.hive.id] ?? []).weight;
+            return (
+              <button key={item.hive.id} type="button" className={`problem-hive-item ${item.severity}`} onClick={() => onSelectHive(item.hive.id)}>
+                <span className="problem-hive-icon"><AlertTriangle size={16} /></span>
+                <span className="problem-hive-body">
+                  <strong>{item.hive.name || `Улей ${item.hive.number || shortId(item.hive.id)}`}</strong>
+                  <small>{item.reasons.slice(0, 2).join(" · ")}</small>
+                </span>
+                <span className="problem-hive-meta">
+                  {latestWeight ? `${formatValue(latestWeight)}` : "нет веса"}
+                  <small>{formatDate(item.updatedAt)}</small>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function buildProblemHiveItem(hive: Hive, readings: SensorReading[], device: Device | undefined, hasAlertEvent: boolean): ProblemHiveItem | null {
+  const indexed = indexReadings(readings);
+  const reasons: string[] = [];
+  let severity: ProblemHiveItem["severity"] = "notice";
+
+  const status = effectiveHiveStatus(hive, readings);
+  if (hive.status === "attention" || hasAlertEvent) {
+    reasons.push("есть предупреждения");
+    severity = "warning";
+  }
+  if (status === "no_device") {
+    reasons.push("нет устройства");
+  }
+  if (status === "no_data") {
+    reasons.push("нет телеметрии");
+  }
+  if (device && device.missed_telemetry_count >= 5) {
+    reasons.push(`пропущено передач: ${device.missed_telemetry_count}`);
+    severity = "critical";
+  }
+  const delta = indexed.weight_change?.value;
+  if (isNumber(delta) && delta < -0.2) {
+    reasons.push(`вес ${formatSigned(delta, " кг")}`);
+    severity = delta < -2 ? "critical" : "warning";
+  }
+  const temperature = indexed.temperature?.value;
+  if (isNumber(temperature) && temperature >= 35) {
+    reasons.push(`температура ${temperature.toFixed(1).replace(".", ",")} °C`);
+    if (severity !== "critical") severity = "warning";
+  }
+  if (isNumber(temperature) && temperature <= 5) {
+    reasons.push(`низкая температура ${temperature.toFixed(1).replace(".", ",")} °C`);
+    if (severity !== "critical") severity = "warning";
+  }
+
+  if (reasons.length === 0) return null;
+  const updatedAt = indexed.weight?.measured_at || indexed.temperature?.measured_at || device?.last_telemetry_at || hive.created_at;
+  return { hive, severity, reasons, updatedAt };
+}
+
+function severityRank(severity: ProblemHiveItem["severity"]) {
+  if (severity === "critical") return 0;
+  if (severity === "warning") return 1;
+  return 2;
+}
+
 export function EventsPanel({ events, tasks = [], advice = [], onTaskStatus }: {
   events: DeviceEvent[];
   tasks?: ApiaryTask[];

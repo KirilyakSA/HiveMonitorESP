@@ -936,6 +936,89 @@ a {
   gap: 18px;
 }
 
+.problem-hives-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.problem-hive-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.problem-hive-item {
+  min-width: 0;
+  min-height: 76px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+  text-align: left;
+}
+
+.problem-hive-item:hover {
+  border-color: #f5a600;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, .08);
+}
+
+.problem-hive-icon {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #f59e0b;
+}
+
+.problem-hive-item.critical .problem-hive-icon {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.problem-hive-item.warning .problem-hive-icon {
+  background: #fff7ed;
+  color: #f97316;
+}
+
+.problem-hive-body,
+.problem-hive-meta {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.problem-hive-body strong,
+.problem-hive-body small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.problem-hive-body strong {
+  color: #0f172a;
+  font-size: 13px;
+}
+
+.problem-hive-body small,
+.problem-hive-meta small {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.problem-hive-meta {
+  justify-items: end;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .lower-dashboard {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 340px;
@@ -2027,6 +2110,10 @@ a {
     grid-template-columns: repeat(3, 1fr);
   }
 
+  .problem-hive-list {
+    grid-template-columns: 1fr;
+  }
+
   .apiary-summary-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2049,6 +2136,7 @@ a {
   }
 
   .summary-grid,
+  .problem-hive-list,
   .apiary-summary-strip,
   .apiary-form-grid,
   .detail-metrics,

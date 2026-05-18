@@ -44,6 +44,19 @@ test.describe("HiveMonitor dashboard", () => {
     expect(hiveRowCount).toBeGreaterThanOrEqual(legendCount);
   });
 
+  test("opens problem hive card from today's problem list", async ({ page }) => {
+    await login(page);
+    await selectNorthApiary(page);
+
+    const problemPanel = page.locator(".problem-hives-panel");
+    await expect(problemPanel.getByRole("heading", { name: "Проблемные ульи сегодня" })).toBeVisible();
+    const problemHive = problemPanel.locator(".problem-hive-item").first();
+    await expect(problemHive).toBeVisible();
+    await problemHive.click();
+    await expect(page.locator(".hive-detail")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Закрыть карточку улья" })).toBeVisible();
+  });
+
   test("logs out and returns to the login screen", async ({ page }) => {
     await login(page);
 
@@ -253,8 +266,8 @@ inserted as (
     'expired',
     now() - interval '5 minutes',
     'Command expired before device acknowledged it',
-    now() - interval '10 minutes',
-    now() - interval '5 minutes'
+    now() + interval '1 second',
+    now() + interval '1 second'
   from target
   returning id
 )

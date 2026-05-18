@@ -11,6 +11,7 @@ import {
   EventsPanel,
   HiveDetail,
   HivesTable,
+  ProblemHivesPanel,
   Sidebar,
   SummaryPanel,
   TipsCard,
@@ -465,6 +466,7 @@ export function App() {
             ) : selectedApiary ? (
               <>
                 <SummaryPanel hives={hives} devices={devices} events={apiaryEvents} snapshots={snapshotsByHive} />
+                <ProblemHivesPanel hives={hives} devices={devices} events={apiaryEvents} snapshots={snapshotsByHive} onSelectHive={setSelectedHiveId} />
                 <div className="content-row">
                   <AlertsPanel events={apiaryEvents} />
                   <EventsPanel events={apiaryEvents} tasks={apiaryTasks} advice={apiaryAdvice} onTaskStatus={updateTaskStatus} />
