@@ -358,6 +358,59 @@ backend/seeds/dev_seed.sql
 
 Seed идемпотентный: его можно запускать повторно, он обновляет фиксированный демо-набор.
 
+## Проверка OTA MVP
+
+OTA MVP состоит из трех частей:
+
+- backend хранит metadata релиза;
+- backend ставит устройству `firmware_update` команду;
+- firmware скачивает `artifact_url`, публикует `commandStatus` и перезагружается.
+
+Ограничения MVP: rollout waves, rollback, certificate pinning и SHA256-проверка внутри firmware еще не реализованы. Для production нельзя использовать случайный публичный URL без контроля TLS/подписи.
+
+Получить access token:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8080/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"demo@hivemonitor.local","password":"password123"}' \
+  | jq -r '.access_token')
+```
+
+Создать firmware release:
+
+```bash
+RELEASE_ID=$(curl -s -X POST http://localhost:8080/firmware/releases \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "device_type": "hive_monitor",
+    "version": "0.1.1",
+    "channel": "dev",
+    "artifact_url": "https://example.com/hivemonitor/firmware-0.1.1.bin",
+    "checksum_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "release_notes": "Dev OTA smoke release"
+  }' | jq -r '.id')
+```
+
+Найти `apiary_id` и `device_uuid` можно через API или SQL. Для демо-данных быстрый SQL-вариант:
+
+```bash
+docker exec deploy-postgres-1 psql -U hivemonitor -d hivemonitor -t -A -c \
+  "select a.id || ' ' || d.id from apiaries a join devices d on d.apiary_id=a.id where a.name='Демо пасека Северная' limit 1;"
+```
+
+Отправить команду обновления:
+
+```bash
+curl -s -X POST "http://localhost:8080/apiaries/$APIARY_ID/devices/$DEVICE_UUID/firmware-update" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d "{\"release_id\":\"$RELEASE_ID\"}" | jq
+```
+
+В frontend это же действие доступно в карточке улья: `Команды устройства` -> `Обновление прошивки` -> выбрать релиз.
+
 ## Проверка MQTT ingestion
 
 Посмотреть topics, на которые подписался ingestion:
