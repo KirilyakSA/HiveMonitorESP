@@ -49,6 +49,7 @@ POST /apiaries/{apiaryID}/hives
 GET  /apiaries/{apiaryID}/devices/unassigned
 POST /apiaries/{apiaryID}/devices/{deviceUUID}/assign
 GET  /apiaries/{apiaryID}/events
+GET  /apiaries/{apiaryID}/weather/history
 GET  /apiaries/{apiaryID}/advice
 PATCH /apiaries/{apiaryID}/advice/{adviceCode}
 GET  /apiaries/{apiaryID}/calendar/tasks

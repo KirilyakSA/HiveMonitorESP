@@ -98,6 +98,21 @@ type SensorReading struct {
 	ReceivedAt time.Time `json:"received_at"`
 }
 
+type WeatherReading struct {
+	ID              string    `json:"id"`
+	APIaryID        string    `json:"apiary_id"`
+	Provider        string    `json:"provider"`
+	SourceType      string    `json:"source_type"`
+	TemperatureC    *float64  `json:"temperature_c,omitempty"`
+	HumidityPercent *float64  `json:"humidity_percent,omitempty"`
+	PressureHPa     *float64  `json:"pressure_hpa,omitempty"`
+	WindSpeedMPS    *float64  `json:"wind_speed_mps,omitempty"`
+	RainMM          *float64  `json:"rain_mm,omitempty"`
+	Condition       string    `json:"condition"`
+	MeasuredAt      time.Time `json:"measured_at"`
+	ReceivedAt      time.Time `json:"received_at"`
+}
+
 type HiveScaleProfile struct {
 	HiveID          string          `json:"hive_id"`
 	APIaryID        string          `json:"apiary_id"`

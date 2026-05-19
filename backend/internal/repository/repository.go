@@ -1361,6 +1361,48 @@ func (r *Repository) TelemetryHistoryForHive(ctx context.Context, userID, hiveID
 	return scanReadings(rows)
 }
 
+func (r *Repository) WeatherHistoryForApiary(ctx context.Context, userID, apiaryID string, from, to time.Time, limit int) ([]domain.WeatherReading, error) {
+	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrNotFound
+	}
+	if limit <= 0 || limit > 2000 {
+		limit = 500
+	}
+	rows, err := r.db.Query(ctx, `
+		select id, apiary_id, provider, source_type, temperature_c, humidity_percent,
+			pressure_hpa, wind_speed_mps, rain_mm, condition, measured_at, received_at
+		from weather_readings
+		where apiary_id = $1
+			and measured_at >= $2
+			and measured_at <= $3
+		order by measured_at asc
+		limit $4
+	`, apiaryID, from, to, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []domain.WeatherReading
+	for rows.Next() {
+		var reading domain.WeatherReading
+		if err := rows.Scan(
+			&reading.ID, &reading.APIaryID, &reading.Provider, &reading.SourceType,
+			&reading.TemperatureC, &reading.HumidityPercent, &reading.PressureHPa,
+			&reading.WindSpeedMPS, &reading.RainMM, &reading.Condition,
+			&reading.MeasuredAt, &reading.ReceivedAt,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, reading)
+	}
+	return result, rows.Err()
+}
+
 func (r *Repository) HiveScaleProfile(ctx context.Context, userID, hiveID string) (*domain.HiveScaleProfile, error) {
 	var apiaryID string
 	if err := r.db.QueryRow(ctx, `select apiary_id from hives where id = $1`, hiveID).Scan(&apiaryID); err != nil {

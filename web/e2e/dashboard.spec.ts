@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { demoEmail, demoPassword, login, queryDatabaseJSON, runDatabaseSQL, selectNorthApiary } from "./support";
+import { demoEmail, demoPassword, login, northApiaryHiveSnapshotFromDatabase, queryDatabaseJSON, runDatabaseSQL, selectNorthApiary } from "./support";
 
 test.describe("HiveMonitor dashboard", () => {
   test("switches auth modes and validates the login form", async ({ page }) => {
@@ -33,13 +33,14 @@ test.describe("HiveMonitor dashboard", () => {
     await expect(hiveRows.first()).toBeVisible();
     const hiveRowCount = await hiveRows.count();
     expect(hiveRowCount).toBeGreaterThanOrEqual(4);
+    const expectedSeriesCount = northApiaryHiveSnapshotFromDatabase().filter((hive) => hive.has_weight_history).length;
 
     const comparison = page.locator(".comparison-panel");
     await comparison.getByRole("button", { name: "30 дней" }).click();
     await expect(comparison.getByRole("img", { name: "Сравнительный график веса ульев" })).toBeVisible();
     const legendCount = await comparison.locator(".multi-legend button").count();
     const seriesCount = await comparison.locator(".series-line").count();
-    expect(legendCount).toBeGreaterThanOrEqual(4);
+    expect(legendCount).toBe(expectedSeriesCount);
     expect(seriesCount).toBe(legendCount);
     expect(hiveRowCount).toBeGreaterThanOrEqual(legendCount);
   });
@@ -135,7 +136,7 @@ test.describe("HiveMonitor dashboard", () => {
     await login(page);
     await selectNorthApiary(page);
 
-    const hiveRow = page.getByRole("button", { name: /Улей 1 - контрольный/ });
+    const hiveRow = page.locator(".hive-table-row").filter({ hasText: "Улей 1 - контрольный" }).first();
     await expect(hiveRow).toBeVisible();
     await hiveRow.scrollIntoViewIfNeeded();
     await hiveRow.click();

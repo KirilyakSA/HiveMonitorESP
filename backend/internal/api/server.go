@@ -86,6 +86,7 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/{apiaryID}/devices/{deviceUUID}/commands", s.createDeviceCommand)
 			r.Post("/{apiaryID}/devices/{deviceUUID}/firmware-update", s.createDeviceFirmwareUpdate)
 			r.Get("/{apiaryID}/events", s.apiaryEvents)
+			r.Get("/{apiaryID}/weather/history", s.apiaryWeatherHistory)
 			r.Get("/{apiaryID}/advice", s.apiaryAdvice)
 			r.Patch("/{apiaryID}/advice/{adviceCode}", s.updateAdviceState)
 			r.Get("/{apiaryID}/calendar/tasks", s.apiaryCalendarTasks)
@@ -665,6 +666,35 @@ func (s *Server) apiaryEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, events)
+}
+
+func (s *Server) apiaryWeatherHistory(w http.ResponseWriter, r *http.Request) {
+	now := time.Now().UTC()
+	from := now.Add(-24 * time.Hour)
+	to := now
+	if value := r.URL.Query().Get("from"); value != "" {
+		parsed, err := time.Parse(time.RFC3339, value)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "from must be RFC3339")
+			return
+		}
+		from = parsed
+	}
+	if value := r.URL.Query().Get("to"); value != "" {
+		parsed, err := time.Parse(time.RFC3339, value)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "to must be RFC3339")
+			return
+		}
+		to = parsed
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	readings, err := s.repo.WeatherHistoryForApiary(r.Context(), userIDFromContext(r.Context()), chi.URLParam(r, "apiaryID"), from, to, limit)
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, readings)
 }
 
 func (s *Server) apiaryAdvice(w http.ResponseWriter, r *http.Request) {

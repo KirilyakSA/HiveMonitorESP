@@ -45,9 +45,10 @@ import {
   HiveTareEvent,
   Organization,
   SensorReading,
-  User
+  User,
+  WeatherReading
 } from "../api";
-import { buildWeatherInsights, weatherForApiary, weatherWarnings } from "./dashboardInsights";
+import { buildWeatherInsights, weatherFromReadings, weatherWarnings } from "./dashboardInsights";
 import { ApiaryMap } from "./MapProvider";
 
 export type AuthMode = "login" | "register";
@@ -1692,8 +1693,8 @@ export function ReadingMini({ title, reading, accent }: { title: string; reading
   );
 }
 
-export function WeatherCard({ apiary, hives = [], snapshots = {} }: { apiary?: Apiary; hives?: Hive[]; snapshots?: HiveSnapshot }) {
-  const weather = weatherForApiary(apiary);
+export function WeatherCard({ apiary, hives = [], snapshots = {}, readings = [] }: { apiary?: Apiary; hives?: Hive[]; snapshots?: HiveSnapshot; readings?: WeatherReading[] }) {
+  const weather = weatherFromReadings(apiary, readings);
   const insights = buildWeatherInsights(hives, snapshots, weather);
   const warnings = weatherWarnings(weather);
   return (
@@ -1714,7 +1715,7 @@ export function WeatherCard({ apiary, hives = [], snapshots = {} }: { apiary?: A
           </div>
         ))}
       </div>
-      <small>{apiary ? `${apiary.locality || apiary.region || "Локация"} · ${apiary.timezone}` : "Локация не выбрана"}</small>
+      <small>{apiary ? `${apiary.locality || apiary.region || "Локация"} · ${apiary.timezone} · ${weather.provider}` : "Локация не выбрана"}</small>
     </section>
   );
 }

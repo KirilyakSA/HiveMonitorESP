@@ -165,6 +165,10 @@ EN: Goal - weather context for hive analysis, where weather is not a decorative 
   EN: selectable provider from a list.
 - RU: модель weather readings.
   EN: weather readings model.
+- RU: DONE MVP - добавлена таблица `weather_readings`, dev seed погодного ряда и API `GET /apiaries/{apiaryID}/weather/history`.
+  EN: DONE MVP - added the `weather_readings` table, dev seed weather time-series and `GET /apiaries/{apiaryID}/weather/history` API.
+- RU: DONE MVP - web погодная карточка читает реальный погодный ряд из API и использует UI fallback только если данных нет.
+  EN: DONE MVP - the web weather card reads real weather time-series from the API and uses the UI fallback only when no data is available.
 - RU: поддержка собственной метеостанции как IoT-устройства пасеки.
   EN: support an owned weather station as an apiary IoT device.
 - RU: архивирование min/max/avg weather metrics.

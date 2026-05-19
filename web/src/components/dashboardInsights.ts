@@ -1,4 +1,4 @@
-import type { Apiary, Hive, SensorReading } from "../api";
+import type { Apiary, Hive, SensorReading, WeatherReading } from "../api";
 
 export type WeatherSnapshot = {
   temperatureC: number;
@@ -8,6 +8,8 @@ export type WeatherSnapshot = {
   pressureHPa: number;
   rainExpected: boolean;
   nightTemperatureC: number;
+  provider: string;
+  measuredAt?: string;
 };
 
 export type WeatherInsight = {
@@ -27,7 +29,28 @@ export function weatherForApiary(apiary?: Apiary): WeatherSnapshot {
     humidityPercent: rainExpected ? 72 : 58,
     pressureHPa: rainExpected ? 1008 : 1015,
     rainExpected,
-    nightTemperatureC: seed % 4 === 0 ? 6 : 11
+    nightTemperatureC: seed % 4 === 0 ? 6 : 11,
+    provider: "ui_mock"
+  };
+}
+
+export function weatherFromReadings(apiary: Apiary | undefined, readings: WeatherReading[]): WeatherSnapshot {
+  if (readings.length === 0) return weatherForApiary(apiary);
+  const latest = [...readings].sort((a, b) => new Date(b.measured_at).getTime() - new Date(a.measured_at).getTime())[0];
+  const nightTemperature = readings.reduce<number | null>((min, item) => {
+    if (typeof item.temperature_c !== "number") return min;
+    return min === null ? item.temperature_c : Math.min(min, item.temperature_c);
+  }, null);
+  return {
+    temperatureC: Math.round(latest.temperature_c ?? 0),
+    condition: latest.condition || "Погодные данные",
+    windMps: Math.round(latest.wind_speed_mps ?? 0),
+    humidityPercent: Math.round(latest.humidity_percent ?? 0),
+    pressureHPa: Math.round(latest.pressure_hpa ?? 0),
+    rainExpected: readings.some((item) => (item.rain_mm ?? 0) > 0),
+    nightTemperatureC: Math.round(nightTemperature ?? latest.temperature_c ?? 0),
+    provider: latest.provider,
+    measuredAt: latest.measured_at
   };
 }
 

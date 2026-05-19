@@ -123,6 +123,9 @@ EN: This document captures the nearest project backlog. GitHub Issues remain the
 - Web:
   - RU: DONE MVP - погодная карточка стала аналитической: weather mock вынесен в data/module слой, а UI показывает объяснения динамики веса с учетом дождя, ветра, ночной температуры и сравнения ульев.
   - EN: DONE MVP - the weather card became analytical: weather mock is moved into a data/module layer, and the UI shows weight-dynamics explanations using rain, wind, night temperature and hive comparison.
+- Backend/Web:
+  - RU: DONE MVP - добавлены `weather_readings`, seed demo weather, API истории погоды по пасеке и подключение web карточки к реальным weather readings с fallback.
+  - EN: DONE MVP - added `weather_readings`, demo weather seed, apiary weather history API and connected the web card to real weather readings with fallback.
 - AI/Backend/Web/Mobile: [#42](https://github.com/KirilyakSA/HiveMonitorESP/issues/42)
   - RU: анализ звука ульев: аудио-признаки, паттерны, аномалии и объяснимые подсказки.
   - EN: hive audio analysis: audio features, patterns, anomalies and explainable recommendations.

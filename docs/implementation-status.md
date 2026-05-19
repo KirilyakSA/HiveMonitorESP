@@ -101,6 +101,7 @@ EN: After the project review, mismatches were moved to GitHub Issues with the hi
 - Для спящих устройств термин `offline` не должен использоваться как прямой alert. Правильная логика - пропущенные плановые передачи.
 - Push-уведомления и mobile MVP пока не реализованы.
 - OTA через backend частично реализована: backend хранит metadata релизов и публикует `firmware_update`, firmware ESP8266/ESP32 скачивает artifact по URL и перезагружается после `commandStatus`. Rollout waves, rollback, certificate pinning и SHA256-проверка внутри firmware еще впереди.
+- Погодный контекст частично реализован: backend хранит `weather_readings`, seed добавляет demo weather, API отдает историю погоды по пасеке, web карточка использует эти данные с fallback. Внешние providers и метеостанции еще впереди.
 
 ## Требования, которые уже отражены в ТЗ, но не реализованы
 
@@ -114,7 +115,7 @@ EN: After the project review, mismatches were moved to GitHub Issues with the hi
 - Alert rules.
 - Alerts создают события, системные теги и уведомления.
 - Push и Telegram delivery.
-- Weather providers и метеостанция пасеки.
+- Внешние weather providers, выбор provider и метеостанция пасеки.
 - Архив телеметрии после 1 года.
 - OTA rollout waves, rollback, certificate pinning и SHA256-проверка внутри firmware.
 - AI premium функции.

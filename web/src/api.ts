@@ -161,6 +161,21 @@ export type FirmwareRelease = {
   updated_at: string;
 };
 
+export type WeatherReading = {
+  id: string;
+  apiary_id: string;
+  provider: string;
+  source_type: string;
+  temperature_c?: number;
+  humidity_percent?: number;
+  pressure_hpa?: number;
+  wind_speed_mps?: number;
+  rain_mm?: number;
+  condition: string;
+  measured_at: string;
+  received_at: string;
+};
+
 export type AdviceItem = {
   id: string;
   code: string;
@@ -373,6 +388,17 @@ export class ApiClient {
 
   apiaryEvents(apiaryId: string, limit = 100): Promise<DeviceEvent[]> {
     return this.request<DeviceEvent[] | null>(`/apiaries/${apiaryId}/events?limit=${limit}`).then(asArray);
+  }
+
+  apiaryWeatherHistory(apiaryId: string, options: { from?: Date; to?: Date; limit?: number } = {}): Promise<WeatherReading[]> {
+    const to = options.to ?? new Date();
+    const from = options.from ?? new Date(to.getTime() - 24 * 60 * 60 * 1000);
+    const params = new URLSearchParams({
+      from: from.toISOString(),
+      to: to.toISOString(),
+      limit: String(options.limit ?? 200)
+    });
+    return this.request<WeatherReading[] | null>(`/apiaries/${apiaryId}/weather/history?${params.toString()}`).then(asArray);
   }
 
   apiaryAdvice(apiaryId: string, date = new Date(), includeHidden = false): Promise<AdviceItem[]> {

@@ -65,6 +65,7 @@ migrations/
 - API советов dashboard и календарных задач пасеки.
 - Worker service для обновления статусов календарных задач и счетчика пропущенной телеметрии.
 - Metadata registry для firmware releases и API постановки `firmware_update` команды по выбранному релизу.
+- Weather readings MVP: хранение погодного ряда по пасеке, dev seed и API истории погоды для web dashboard.
 
 ## MQTT
 
@@ -127,6 +128,7 @@ GET  /apiaries/{apiaryID}/devices/{deviceUUID}/commands
 POST /apiaries/{apiaryID}/devices/{deviceUUID}/commands
 POST /apiaries/{apiaryID}/devices/{deviceUUID}/firmware-update
 GET  /apiaries/{apiaryID}/events
+GET  /apiaries/{apiaryID}/weather/history
 GET  /apiaries/{apiaryID}/advice
 PATCH /apiaries/{apiaryID}/advice/{adviceCode}
 GET  /apiaries/{apiaryID}/calendar/tasks
@@ -183,6 +185,19 @@ Firmware update MVP / MVP обновления прошивки:
 - RU: firmware-side flashing MVP реализован в прошивке для ESP8266/ESP32: устройство скачивает `artifact_url`, публикует `commandStatus` и перезагружается. Rollout waves, rollback, certificate pinning и firmware-side SHA256 verification остаются следующими hardening-задачами.
   EN: firmware-side flashing MVP is implemented for ESP8266/ESP32: the device downloads `artifact_url`, publishes `commandStatus` and reboots. Rollout waves, rollback, certificate pinning and firmware-side SHA256 verification remain next hardening tasks.
 
+## Погодный контекст
+
+Weather context MVP / MVP погодного контекста:
+
+- RU: backend хранит погодные измерения в `weather_readings` с привязкой к пасеке, provider/source metadata и временем измерения.
+  EN: the backend stores weather measurements in `weather_readings` linked to an apiary, with provider/source metadata and measurement time.
+- RU: `GET /apiaries/{apiaryID}/weather/history?from=...&to=...&limit=...` возвращает погодный ряд для dashboard и будущих аналитических графиков.
+  EN: `GET /apiaries/{apiaryID}/weather/history?from=...&to=...&limit=...` returns weather time-series for the dashboard and future analytical charts.
+- RU: dev seed добавляет демо-погоду для тестовых пасек, чтобы UI мог работать без внешнего погодного API.
+  EN: the dev seed adds demo weather for test apiaries so the UI can work without an external weather API.
+- RU: web погодная карточка использует реальные readings из API, а если их нет - аккуратно возвращается к UI fallback.
+  EN: the web weather card uses real readings from the API and falls back to the UI fallback when readings are absent.
+
 ## Календарь работ и советы
 
 Backend хранит шаблонную базу знаний, а не жесткий календарь:
@@ -202,7 +217,7 @@ calendar_template + apiary_calendar_settings + date_shift_days + trigger_type + 
 - Alerts, системные теги и события от alerts.
 - Проверка пропущенных плановых передач.
 - Уведомления push/Telegram/in-app.
-- Weather providers и метеостанции.
+- Внешние weather providers, выбор provider из списка и метеостанции как IoT-устройства.
 - Полная recurring task engine с RRULE.
 - Архивация телеметрии.
 - OTA rollout waves, rollback, certificate pinning и firmware-side SHA256 verification.

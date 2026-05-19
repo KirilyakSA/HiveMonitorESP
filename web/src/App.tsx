@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiClient } from "./api";
-import type { AdviceItem, Apiary, ApiaryTask, Device, DeviceCommand, DeviceEvent, FirmwareRelease, Hive, HiveScaleProfile, HiveTareEvent, Organization, SensorReading, User } from "./api";
+import type { AdviceItem, Apiary, ApiaryTask, Device, DeviceCommand, DeviceEvent, FirmwareRelease, Hive, HiveScaleProfile, HiveTareEvent, Organization, SensorReading, User, WeatherReading } from "./api";
 import {
   AlertsPanel,
   ApiariesScreen,
@@ -45,6 +45,7 @@ export function App() {
   const [selectedScaleProfile, setSelectedScaleProfile] = useState<HiveScaleProfile | null>(null);
   const [apiaryAdvice, setApiaryAdvice] = useState<AdviceItem[]>([]);
   const [apiaryTasks, setApiaryTasks] = useState<ApiaryTask[]>([]);
+  const [weatherReadings, setWeatherReadings] = useState<WeatherReading[]>([]);
   const [includeHiddenAdvice, setIncludeHiddenAdvice] = useState(false);
   const [selectedOrgId, setSelectedOrgId] = useState("");
   const [selectedApiaryId, setSelectedApiaryId] = useState("");
@@ -112,6 +113,7 @@ export function App() {
       setApiaryEvents([]);
       setApiaryAdvice([]);
       setApiaryTasks([]);
+      setWeatherReadings([]);
       setHiveSnapshots({});
       setHiveHistories({});
       setDeviceCommands([]);
@@ -161,18 +163,20 @@ export function App() {
   async function loadApiaryData(apiaryId: string, period: ChartPeriod = comparisonPeriod) {
     await run("Данные пасеки обновлены", async () => {
       const calendarRange = monthRange();
-      const [nextHives, nextDevices, nextEvents, nextAdvice, nextTasks] = await Promise.all([
+      const [nextHives, nextDevices, nextEvents, nextAdvice, nextTasks, nextWeather] = await Promise.all([
         client.hives(apiaryId),
         client.unassignedDevices(apiaryId),
         client.apiaryEvents(apiaryId),
         client.apiaryAdvice(apiaryId, new Date(), includeHiddenAdvice).catch(() => []),
-        client.apiaryTasks(apiaryId, calendarRange.from, calendarRange.to).catch(() => [])
+        client.apiaryTasks(apiaryId, calendarRange.from, calendarRange.to).catch(() => []),
+        client.apiaryWeatherHistory(apiaryId).catch(() => [])
       ]);
       setHives(nextHives);
       setDevices(nextDevices);
       setApiaryEvents(nextEvents);
       setApiaryAdvice(nextAdvice);
       setApiaryTasks(nextTasks);
+      setWeatherReadings(nextWeather);
       const pairs = await Promise.all(
         nextHives.map(async (hive) => [hive.id, await client.latestTelemetry(hive.id)] as const)
       );
@@ -527,7 +531,7 @@ export function App() {
                     />
                   </div>
                   <aside className="insights-column">
-                    <WeatherCard apiary={selectedApiary} hives={hives} snapshots={snapshotsByHive} />
+                    <WeatherCard apiary={selectedApiary} hives={hives} snapshots={snapshotsByHive} readings={weatherReadings} />
                     <TipsCard
                       advice={apiaryAdvice}
                       events={apiaryEvents}

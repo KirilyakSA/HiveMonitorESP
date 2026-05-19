@@ -98,6 +98,7 @@ HIVEMONITOR_E2E_DB_NAME       база данных, по умолчанию hiv
 - Нет refresh tokens и управления сессиями, потому что backend пока выдает только access token.
 - Command API MVP уже есть: web может отправлять deferred-команды обслуживания (`reboot`, `firmware_update`, `config_update`) и команды сессии для backend-тары (`hold_config_session`, `capture_weight`, `finish_config_session`). Полное сохранение `scale_profile` и история тары остаются следующим backend-инкрементом.
 - Нет alert rules и уведомлений, поэтому статус связи по пропущенным передачам будет полноценно отображаться после backend-инкремента #19.
+- Погодная карточка уже читает `GET /apiaries/{apiaryID}/weather/history`; если ряд отсутствует, используется UI fallback до подключения внешнего provider или метеостанции.
 - Нет ролей/permission matrix в UI, потому что backend пока проверяет только membership на уровне организации/пасеки.
 - Нет полноценной i18n-системы; MVP интерфейс написан на русском.
 - Удаление устройства, улья и пасеки реализовано как MVP hard-delete flow. После MVP нужно добавить soft-delete/archive policy, audit trail и более подробный выбор сохранения истории.

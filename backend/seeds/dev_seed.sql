@@ -374,6 +374,12 @@ where device_id in (
     '55555555-5555-5555-5555-555555555561'::uuid
 );
 
+delete from weather_readings
+where apiary_id in (
+    '33333333-3333-3333-3333-333333333331'::uuid,
+    '33333333-3333-3333-3333-333333333332'::uuid
+);
+
 delete from device_assignments
 where device_id in (
     '55555555-5555-5555-5555-555555555551'::uuid,
@@ -661,5 +667,46 @@ on conflict (id) do update set
     ok = excluded.ok,
     occurred_at = excluded.occurred_at,
     received_at = excluded.received_at;
+
+insert into weather_readings (
+    apiary_id, provider, source_type, temperature_c, humidity_percent,
+    pressure_hpa, wind_speed_mps, rain_mm, condition, measured_at, received_at, raw_payload
+)
+select
+    apiary_id,
+    'demo_weather',
+    'external_api',
+    temperature_c,
+    humidity_percent,
+    pressure_hpa,
+    wind_speed_mps,
+    rain_mm,
+    condition,
+    measured_at,
+    now(),
+    jsonb_build_object('seed', 'dev_seed', 'condition', condition)
+from (
+    select
+        '33333333-3333-3333-3333-333333333331'::uuid as apiary_id,
+        now() - make_interval(hours => point.hour_offset) as measured_at,
+        round((18 + sin(point.hour_offset / 3.0) * 4)::numeric, 1)::double precision as temperature_c,
+        round((62 + cos(point.hour_offset / 4.0) * 12)::numeric, 1)::double precision as humidity_percent,
+        round((1012 + sin(point.hour_offset / 5.0) * 5)::numeric, 1)::double precision as pressure_hpa,
+        round((4 + abs(sin(point.hour_offset / 2.0)) * 5)::numeric, 1)::double precision as wind_speed_mps,
+        case when point.hour_offset between 7 and 10 then 1.4 else 0 end::double precision as rain_mm,
+        case when point.hour_offset between 7 and 10 then 'Дождь' else 'Переменная облачность' end as condition
+    from generate_series(0, 23) as point(hour_offset)
+    union all
+    select
+        '33333333-3333-3333-3333-333333333332'::uuid as apiary_id,
+        now() - make_interval(hours => point.hour_offset) as measured_at,
+        round((20 + sin(point.hour_offset / 3.0) * 3)::numeric, 1)::double precision as temperature_c,
+        round((55 + cos(point.hour_offset / 4.0) * 9)::numeric, 1)::double precision as humidity_percent,
+        round((1015 + sin(point.hour_offset / 5.0) * 4)::numeric, 1)::double precision as pressure_hpa,
+        round((3 + abs(sin(point.hour_offset / 2.0)) * 4)::numeric, 1)::double precision as wind_speed_mps,
+        0::double precision as rain_mm,
+        'Ясно' as condition
+    from generate_series(0, 23) as point(hour_offset)
+) as weather;
 
 commit;

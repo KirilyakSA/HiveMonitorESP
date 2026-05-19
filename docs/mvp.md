@@ -94,6 +94,7 @@ GET /hives/{id}/telemetry/latest
 GET /hives/{id}/telemetry/history
 GET /apiaries/{id}/events
 GET /hives/{id}/events
+GET /apiaries/{id}/weather/history
 Web: login/register, create organization/apiary/hive, assign device, view telemetry/events
 ```
 
@@ -106,11 +107,12 @@ Web: login/register, create organization/apiary/hive, assign device, view teleme
 - Backend отправляет MQTT-команды устройствам через `device_commands`; firmware публикует `commandStatus` с `commandId`, backend сохраняет ack/result и worker переводит просроченные команды в `expired`.
 - Web отправляет базовые команды обслуживания и мастер backend-тары. Firmware публикует ack/result для `capture_weight`; ручной fallback raw-веса в dev UI остается как страховка для старых прошивок.
 - Backend хранит metadata firmware releases и может поставить `firmware_update` команду конкретному устройству. Firmware OTA MVP скачивает artifact по URL, публикует `commandStatus` и перезагружается.
+- Backend хранит demo weather readings и отдает `GET /apiaries/{id}/weather/history`; web погодная карточка использует API-данные с fallback, если погодного ряда нет.
 - Alerts, системные теги, события от alerts и уведомления еще не реализованы.
 - Проверка пропущенных передач реализована в worker MVP через `missed_telemetry_count`; уведомления по ним еще впереди.
 - Tasks/reminders еще не реализованы.
 - OTA rollout waves, rollback, certificate pinning и SHA256-проверка внутри firmware еще не реализованы.
-- Weather provider и метеостанции еще не реализованы.
+- Внешний weather provider, выбор provider и метеостанции еще не реализованы.
 - Billing/tariffs пока описаны в ТЗ, но не реализованы.
 
 ## Следующий MVP-инкремент
