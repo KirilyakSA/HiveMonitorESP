@@ -172,7 +172,7 @@ apiaries/{apiaryId}/devices/{deviceId}/status
 - `hold_config_session` - удержать устройство активным и не уходить в deep sleep;
 - `capture_weight` - выполнить одноразовый raw-замер веса для backend-мастера тары;
 - `finish_config_session` - завершить сессию настройки и снова разрешить deep sleep;
-- `firmware_update` - зарезервирована под будущий OTA flow, сейчас возвращает ошибку "not implemented";
+- `firmware_update` - backend уже может передать metadata релиза (`version`, `artifact_url`, `checksum_sha256`), но OTA flashing в прошивке еще не реализован и сейчас возвращает ошибку "not implemented";
 - legacy/dev команды `measure`, `tare`, `clearBuffer` пока сохранены для локальной совместимости.
 
 Команды можно отправлять строкой (`measure`) или JSON:

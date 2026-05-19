@@ -67,6 +67,11 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/", s.createOrganization)
 		})
 
+		r.Route("/firmware", func(r chi.Router) {
+			r.Get("/releases", s.listFirmwareReleases)
+			r.Post("/releases", s.createFirmwareRelease)
+		})
+
 		r.Route("/apiaries", func(r chi.Router) {
 			r.Get("/", s.listApiaries)
 			r.Post("/", s.createApiary)
@@ -79,6 +84,7 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/{apiaryID}/devices/{deviceUUID}/assign", s.assignDevice)
 			r.Get("/{apiaryID}/devices/{deviceUUID}/commands", s.listDeviceCommands)
 			r.Post("/{apiaryID}/devices/{deviceUUID}/commands", s.createDeviceCommand)
+			r.Post("/{apiaryID}/devices/{deviceUUID}/firmware-update", s.createDeviceFirmwareUpdate)
 			r.Get("/{apiaryID}/events", s.apiaryEvents)
 			r.Get("/{apiaryID}/advice", s.apiaryAdvice)
 			r.Patch("/{apiaryID}/advice/{adviceCode}", s.updateAdviceState)
@@ -378,6 +384,49 @@ func (s *Server) listDeviceCommands(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, commands)
 }
 
+func (s *Server) listFirmwareReleases(w http.ResponseWriter, r *http.Request) {
+	includeInactive := r.URL.Query().Get("include_inactive") == "true"
+	releases, err := s.repo.ListFirmwareReleases(
+		r.Context(),
+		userIDFromContext(r.Context()),
+		r.URL.Query().Get("device_type"),
+		r.URL.Query().Get("channel"),
+		includeInactive,
+	)
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, releases)
+}
+
+func (s *Server) createFirmwareRelease(w http.ResponseWriter, r *http.Request) {
+	var input domain.CreateFirmwareReleaseInput
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	input.DeviceType = strings.TrimSpace(input.DeviceType)
+	input.Version = strings.TrimSpace(input.Version)
+	input.Channel = strings.TrimSpace(input.Channel)
+	input.ArtifactURL = strings.TrimSpace(input.ArtifactURL)
+	input.ChecksumSHA256 = strings.TrimSpace(input.ChecksumSHA256)
+	input.ReleaseNotes = strings.TrimSpace(input.ReleaseNotes)
+	if input.Version == "" || input.ArtifactURL == "" || input.ChecksumSHA256 == "" {
+		writeError(w, http.StatusBadRequest, "version, artifact_url and checksum_sha256 are required")
+		return
+	}
+	if !strings.HasPrefix(input.ArtifactURL, "https://") && !strings.HasPrefix(input.ArtifactURL, "http://") {
+		writeError(w, http.StatusBadRequest, "artifact_url must be an HTTP(S) URL")
+		return
+	}
+	release, err := s.repo.CreateFirmwareRelease(r.Context(), userIDFromContext(r.Context()), input)
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, release)
+}
+
 func (s *Server) createDeviceCommand(w http.ResponseWriter, r *http.Request) {
 	var input domain.CreateDeviceCommandInput
 	if !decodeJSON(w, r, &input) {
@@ -407,7 +456,81 @@ func (s *Server) createDeviceCommand(w http.ResponseWriter, r *http.Request) {
 		s.handleRepoError(w, err)
 		return
 	}
+	s.writePublishedDeviceCommand(w, r, command)
+}
 
+func (s *Server) createDeviceFirmwareUpdate(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		ReleaseID        string `json:"release_id"`
+		Force            bool   `json:"force"`
+		ExpiresInSeconds int    `json:"expires_in_seconds"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	input.ReleaseID = strings.TrimSpace(input.ReleaseID)
+	if input.ReleaseID == "" {
+		writeError(w, http.StatusBadRequest, "release_id is required")
+		return
+	}
+
+	userID := userIDFromContext(r.Context())
+	apiaryID := chi.URLParam(r, "apiaryID")
+	deviceUUID := chi.URLParam(r, "deviceUUID")
+	release, err := s.repo.GetFirmwareRelease(r.Context(), userID, input.ReleaseID)
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	if !release.IsActive {
+		writeError(w, http.StatusBadRequest, "firmware release is inactive")
+		return
+	}
+	device, err := s.repo.GetDevice(r.Context(), userID, apiaryID, deviceUUID)
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	if release.DeviceType != device.DeviceType {
+		writeError(w, http.StatusBadRequest, "firmware release device_type does not match device")
+		return
+	}
+
+	payload := map[string]any{
+		"release_id":      release.ID,
+		"version":         release.Version,
+		"channel":         release.Channel,
+		"artifact_url":    release.ArtifactURL,
+		"checksum_sha256": release.ChecksumSHA256,
+		"force":           input.Force,
+	}
+	if release.SizeBytes != nil {
+		payload["size_bytes"] = *release.SizeBytes
+	}
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		s.internalError(w, err)
+		return
+	}
+	command, err := s.repo.CreateDeviceCommand(
+		r.Context(),
+		userID,
+		apiaryID,
+		deviceUUID,
+		domain.CreateDeviceCommandInput{
+			Command:          "firmware_update",
+			Payload:          payloadJSON,
+			ExpiresInSeconds: input.ExpiresInSeconds,
+		},
+	)
+	if err != nil {
+		s.handleRepoError(w, err)
+		return
+	}
+	s.writePublishedDeviceCommand(w, r, command)
+}
+
+func (s *Server) writePublishedDeviceCommand(w http.ResponseWriter, r *http.Request, command *domain.DeviceCommand) {
 	if s.commands == nil {
 		updated, updateErr := s.repo.MarkDeviceCommandFailed(r.Context(), command.ID, "mqtt command publisher is not configured", nil)
 		if updateErr != nil {

@@ -114,6 +114,9 @@ EN: This document captures the nearest project backlog. GitHub Issues remain the
 - Backend/Web:
   - RU: DONE MVP - снятие последнего/выбранного магазина: активная тара возвращается к предыдущему магазину или таре пустого улья, профиль веса показывается в панели улья.
   - EN: DONE MVP - remove latest/selected super: active tare falls back to the previous super or empty-hive tare, and the hive drawer shows the weight profile.
+- Backend:
+  - RU: DONE MVP - firmware release metadata registry и endpoint постановки `firmware_update` команды с payload релиза. Следующий шаг - firmware OTA flashing, rollout waves и rollback.
+  - EN: DONE MVP - firmware release metadata registry and endpoint for queuing a `firmware_update` command with release payload. Next step - firmware OTA flashing, rollout waves and rollback.
 - AI/Backend/Web/Mobile: [#42](https://github.com/KirilyakSA/HiveMonitorESP/issues/42)
   - RU: анализ звука ульев: аудио-признаки, паттерны, аномалии и объяснимые подсказки.
   - EN: hive audio analysis: audio features, patterns, anomalies and explainable recommendations.

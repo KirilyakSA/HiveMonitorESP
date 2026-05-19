@@ -64,6 +64,7 @@ migrations/
 - Seed базы советов, задач, медоносов и периодов цветения.
 - API советов dashboard и календарных задач пасеки.
 - Worker service для обновления статусов календарных задач и счетчика пропущенной телеметрии.
+- Metadata registry для firmware releases и API постановки `firmware_update` команды по выбранному релизу.
 
 ## MQTT
 
@@ -124,6 +125,7 @@ DELETE /apiaries/{apiaryID}/devices/{deviceUUID}
 POST /apiaries/{apiaryID}/devices/{deviceUUID}/assign
 GET  /apiaries/{apiaryID}/devices/{deviceUUID}/commands
 POST /apiaries/{apiaryID}/devices/{deviceUUID}/commands
+POST /apiaries/{apiaryID}/devices/{deviceUUID}/firmware-update
 GET  /apiaries/{apiaryID}/events
 GET  /apiaries/{apiaryID}/advice
 PATCH /apiaries/{apiaryID}/advice/{adviceCode}
@@ -138,6 +140,9 @@ GET  /hives/{hiveID}/scale/profile
 POST /hives/{hiveID}/scale/tare
 POST /hives/{hiveID}/scale/supers/remove
 DELETE /hives/{hiveID}
+
+GET  /firmware/releases
+POST /firmware/releases
 ```
 
 Device command MVP / MVP команд устройств:
@@ -167,6 +172,17 @@ Device command MVP / MVP команд устройств:
 - RU: `worker-service` переводит просроченные команды в статус `expired`, если устройство не подтвердило их до `expires_at`.
   EN: `worker-service` marks commands as `expired` when the device does not acknowledge them before `expires_at`.
 
+Firmware update MVP / MVP обновления прошивки:
+
+- RU: backend хранит только metadata релиза: `device_type`, `version`, `channel`, `artifact_url`, `checksum_sha256`, `size_bytes`, `release_notes`, `is_active`.
+  EN: the backend stores release metadata only: `device_type`, `version`, `channel`, `artifact_url`, `checksum_sha256`, `size_bytes`, `release_notes`, `is_active`.
+- RU: `POST /firmware/releases` создает или обновляет релиз по уникальному ключу `device_type + version + channel`.
+  EN: `POST /firmware/releases` creates or updates a release by the unique key `device_type + version + channel`.
+- RU: `POST /apiaries/{apiaryID}/devices/{deviceUUID}/firmware-update` проверяет доступ пользователя, активность релиза и совместимость `device_type`, затем создает deferred `firmware_update` command с payload релиза.
+  EN: `POST /apiaries/{apiaryID}/devices/{deviceUUID}/firmware-update` checks user access, release activity and `device_type` compatibility, then creates a deferred `firmware_update` command with release payload.
+- RU: flashing/rollback на firmware-стороне еще не реализованы: текущая прошивка получает команду, но возвращает `not implemented`.
+  EN: firmware-side flashing/rollback are not implemented yet: current firmware receives the command but returns `not implemented`.
+
 ## Календарь работ и советы
 
 Backend хранит шаблонную базу знаний, а не жесткий календарь:
@@ -183,14 +199,13 @@ calendar_template + apiary_calendar_settings + date_shift_days + trigger_type + 
 
 - Полная permission matrix для ролей организации и пасеки.
 - Email invitations.
-- MQTT command API/service.
 - Alerts, системные теги и события от alerts.
 - Проверка пропущенных плановых передач.
 - Уведомления push/Telegram/in-app.
 - Weather providers и метеостанции.
 - Полная recurring task engine с RRULE.
 - Архивация телеметрии.
-- OTA rollout.
+- OTA flashing в firmware, rollout waves и rollback.
 - Tariffs/billing.
 - AI premium functions.
 

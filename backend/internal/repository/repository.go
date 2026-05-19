@@ -522,6 +522,102 @@ func scanDevice(row pgx.Row) (*domain.Device, error) {
 	return &device, nil
 }
 
+func (r *Repository) ListFirmwareReleases(ctx context.Context, userID, deviceType, channel string, includeInactive bool) ([]domain.FirmwareRelease, error) {
+	if _, err := r.GetUserByID(ctx, userID); err != nil {
+		return nil, err
+	}
+
+	rows, err := r.db.Query(ctx, `
+		select id, device_type, version, channel, artifact_url, checksum_sha256,
+			size_bytes, release_notes, is_active, created_by, created_at, updated_at
+		from firmware_releases
+		where (nullif($1, '') is null or device_type = nullif($1, ''))
+			and (nullif($2, '') is null or channel = nullif($2, ''))
+			and ($3::bool or is_active)
+		order by created_at desc, version desc
+	`, strings.TrimSpace(deviceType), strings.TrimSpace(channel), includeInactive)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []domain.FirmwareRelease
+	for rows.Next() {
+		release, err := scanFirmwareRelease(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, *release)
+	}
+	return result, rows.Err()
+}
+
+func (r *Repository) CreateFirmwareRelease(ctx context.Context, userID string, input domain.CreateFirmwareReleaseInput) (*domain.FirmwareRelease, error) {
+	if _, err := r.GetUserByID(ctx, userID); err != nil {
+		return nil, err
+	}
+	deviceType := strings.TrimSpace(input.DeviceType)
+	if deviceType == "" {
+		deviceType = "hive_monitor"
+	}
+	channel := strings.TrimSpace(input.Channel)
+	if channel == "" {
+		channel = "stable"
+	}
+	isActive := true
+	if input.IsActive != nil {
+		isActive = *input.IsActive
+	}
+
+	row := r.db.QueryRow(ctx, `
+		insert into firmware_releases (
+			device_type, version, channel, artifact_url, checksum_sha256,
+			size_bytes, release_notes, is_active, created_by
+		)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		on conflict (device_type, version, channel) do update
+		set artifact_url = excluded.artifact_url,
+			checksum_sha256 = excluded.checksum_sha256,
+			size_bytes = excluded.size_bytes,
+			release_notes = excluded.release_notes,
+			is_active = excluded.is_active,
+			updated_at = now()
+		returning id, device_type, version, channel, artifact_url, checksum_sha256,
+			size_bytes, release_notes, is_active, created_by, created_at, updated_at
+	`, deviceType, strings.TrimSpace(input.Version), channel, strings.TrimSpace(input.ArtifactURL),
+		strings.TrimSpace(input.ChecksumSHA256), input.SizeBytes, strings.TrimSpace(input.ReleaseNotes), isActive, userID)
+	return scanFirmwareRelease(row)
+}
+
+func (r *Repository) GetFirmwareRelease(ctx context.Context, userID, releaseID string) (*domain.FirmwareRelease, error) {
+	if _, err := r.GetUserByID(ctx, userID); err != nil {
+		return nil, err
+	}
+	row := r.db.QueryRow(ctx, `
+		select id, device_type, version, channel, artifact_url, checksum_sha256,
+			size_bytes, release_notes, is_active, created_by, created_at, updated_at
+		from firmware_releases
+		where id = $1
+	`, releaseID)
+	return scanFirmwareRelease(row)
+}
+
+func scanFirmwareRelease(row pgx.Row) (*domain.FirmwareRelease, error) {
+	var release domain.FirmwareRelease
+	if err := row.Scan(
+		&release.ID, &release.DeviceType, &release.Version, &release.Channel,
+		&release.ArtifactURL, &release.ChecksumSHA256, &release.SizeBytes,
+		&release.ReleaseNotes, &release.IsActive, &release.CreatedBy,
+		&release.CreatedAt, &release.UpdatedAt,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &release, nil
+}
+
 func (r *Repository) CreateDeviceCommand(ctx context.Context, userID, apiaryID, deviceUUID string, input domain.CreateDeviceCommandInput) (*domain.DeviceCommand, error) {
 	ok, err := r.UserCanAccessApiary(ctx, userID, apiaryID)
 	if err != nil {

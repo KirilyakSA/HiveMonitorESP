@@ -146,6 +146,21 @@ export type DeviceCommand = {
   updated_at: string;
 };
 
+export type FirmwareRelease = {
+  id: string;
+  device_type: string;
+  version: string;
+  channel: string;
+  artifact_url: string;
+  checksum_sha256: string;
+  size_bytes?: number;
+  release_notes: string;
+  is_active: boolean;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AdviceItem = {
   id: string;
   code: string;
@@ -308,6 +323,35 @@ export class ApiClient {
     return this.request(`/apiaries/${apiaryId}/devices/${deviceId}/commands`, {
       method: "POST",
       body: { command, payload }
+    });
+  }
+
+  firmwareReleases(options: { deviceType?: string; channel?: string; includeInactive?: boolean } = {}): Promise<FirmwareRelease[]> {
+    const params = new URLSearchParams();
+    if (options.deviceType) params.set("device_type", options.deviceType);
+    if (options.channel) params.set("channel", options.channel);
+    if (options.includeInactive) params.set("include_inactive", "true");
+    const query = params.toString();
+    return this.request<FirmwareRelease[] | null>(`/firmware/releases${query ? `?${query}` : ""}`).then(asArray);
+  }
+
+  createFirmwareRelease(input: {
+    device_type?: string;
+    version: string;
+    channel?: string;
+    artifact_url: string;
+    checksum_sha256: string;
+    size_bytes?: number;
+    release_notes?: string;
+    is_active?: boolean;
+  }): Promise<FirmwareRelease> {
+    return this.request("/firmware/releases", { method: "POST", body: input });
+  }
+
+  createFirmwareUpdateCommand(apiaryId: string, deviceId: string, releaseId: string, force = false): Promise<DeviceCommand> {
+    return this.request(`/apiaries/${apiaryId}/devices/${deviceId}/firmware-update`, {
+      method: "POST",
+      body: { release_id: releaseId, force }
     });
   }
 

@@ -182,6 +182,32 @@ type CreateDeviceCommandInput struct {
 	ExpiresInSeconds int             `json:"expires_in_seconds"`
 }
 
+type FirmwareRelease struct {
+	ID             string    `json:"id"`
+	DeviceType     string    `json:"device_type"`
+	Version        string    `json:"version"`
+	Channel        string    `json:"channel"`
+	ArtifactURL    string    `json:"artifact_url"`
+	ChecksumSHA256 string    `json:"checksum_sha256"`
+	SizeBytes      *int64    `json:"size_bytes,omitempty"`
+	ReleaseNotes   string    `json:"release_notes"`
+	IsActive       bool      `json:"is_active"`
+	CreatedBy      *string   `json:"created_by,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+type CreateFirmwareReleaseInput struct {
+	DeviceType     string `json:"device_type"`
+	Version        string `json:"version"`
+	Channel        string `json:"channel"`
+	ArtifactURL    string `json:"artifact_url"`
+	ChecksumSHA256 string `json:"checksum_sha256"`
+	SizeBytes      *int64 `json:"size_bytes,omitempty"`
+	ReleaseNotes   string `json:"release_notes"`
+	IsActive       *bool  `json:"is_active,omitempty"`
+}
+
 type CalendarSettings struct {
 	APIaryID                 string    `json:"apiary_id"`
 	TemplateID               string    `json:"template_id"`
