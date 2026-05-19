@@ -1641,6 +1641,41 @@ a {
   color: #f5a600;
 }
 
+.weather-insights {
+  display: grid;
+  gap: 8px;
+}
+
+.weather-insight {
+  display: grid;
+  gap: 4px;
+  border: 1px solid #edf2f7;
+  border-radius: 10px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.weather-insight strong {
+  color: #1f2937;
+  font-size: 13px;
+}
+
+.weather-insight span {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.weather-insight.severity-warning {
+  border-color: #fed7aa;
+  background: #fffbeb;
+}
+
+.weather-insight.severity-notice {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+
 .tip-line {
   min-height: 48px;
   border: 1px solid #edf2f7;

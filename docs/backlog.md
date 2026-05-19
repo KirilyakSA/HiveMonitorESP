@@ -117,6 +117,9 @@ EN: This document captures the nearest project backlog. GitHub Issues remain the
 - Backend:
   - RU: DONE MVP - firmware release metadata registry и endpoint постановки `firmware_update` команды с payload релиза. Следующий шаг - firmware OTA flashing, rollout waves и rollback.
   - EN: DONE MVP - firmware release metadata registry and endpoint for queuing a `firmware_update` command with release payload. Next step - firmware OTA flashing, rollout waves and rollback.
+- Web:
+  - RU: DONE MVP - погодная карточка стала аналитической: weather mock вынесен в data/module слой, а UI показывает объяснения динамики веса с учетом дождя, ветра, ночной температуры и сравнения ульев.
+  - EN: DONE MVP - the weather card became analytical: weather mock is moved into a data/module layer, and the UI shows weight-dynamics explanations using rain, wind, night temperature and hive comparison.
 - AI/Backend/Web/Mobile: [#42](https://github.com/KirilyakSA/HiveMonitorESP/issues/42)
   - RU: анализ звука ульев: аудио-признаки, паттерны, аномалии и объяснимые подсказки.
   - EN: hive audio analysis: audio features, patterns, anomalies and explainable recommendations.

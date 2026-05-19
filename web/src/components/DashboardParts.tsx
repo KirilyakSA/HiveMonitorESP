@@ -46,6 +46,7 @@ import {
   SensorReading,
   User
 } from "../api";
+import { buildWeatherInsights, weatherForApiary, weatherWarnings } from "./dashboardInsights";
 import { ApiaryMap } from "./MapProvider";
 
 export type AuthMode = "login" | "register";
@@ -1579,18 +1580,28 @@ export function ReadingMini({ title, reading, accent }: { title: string; reading
   );
 }
 
-export function WeatherCard({ apiary }: { apiary?: Apiary }) {
+export function WeatherCard({ apiary, hives = [], snapshots = {} }: { apiary?: Apiary; hives?: Hive[]; snapshots?: HiveSnapshot }) {
+  const weather = weatherForApiary(apiary);
+  const insights = buildWeatherInsights(hives, snapshots, weather);
+  const warnings = weatherWarnings(weather);
   return (
     <section className="panel-card weather-card">
       <SectionHeader title="Погодные условия" info />
-      <div className="weather-main"><CloudSun size={44} /><div><strong>22 °C</strong><span>Переменная облачность</span></div></div>
-      <div className="weather-stats"><span>Ветер <b>6 м/с</b></span><span>Влажность <b>58%</b></span><span>Давление <b>1015 гПа</b></span></div>
+      <div className="weather-main"><CloudSun size={44} /><div><strong>{weather.temperatureC} °C</strong><span>{weather.condition}</span></div></div>
+      <div className="weather-stats"><span>Ветер <b>{weather.windMps} м/с</b></span><span>Влажность <b>{weather.humidityPercent}%</b></span><span>Давление <b>{weather.pressureHPa} гПа</b></span></div>
       <h3>Предупреждения погоды</h3>
       <ul>
-        <li><AlertTriangle size={14} />Похолодание ночью до 6°C</li>
-        <li><CloudSun size={14} />Ожидается дождь вечером</li>
-        <li><Zap size={14} />Порывы ветра до 12 м/с</li>
+        {warnings.map((warning) => <li key={warning}><AlertTriangle size={14} />{warning}</li>)}
       </ul>
+      <h3>Аналитика по ульям</h3>
+      <div className="weather-insights">
+        {insights.map((insight) => (
+          <div key={insight.title} className={`weather-insight severity-${insight.severity}`}>
+            <strong>{insight.title}</strong>
+            <span>{insight.body}</span>
+          </div>
+        ))}
+      </div>
       <small>{apiary ? `${apiary.locality || apiary.region || "Локация"} · ${apiary.timezone}` : "Локация не выбрана"}</small>
     </section>
   );

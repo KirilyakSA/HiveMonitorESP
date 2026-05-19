@@ -507,7 +507,7 @@ export function App() {
                     />
                   </div>
                   <aside className="insights-column">
-                    <WeatherCard apiary={selectedApiary} />
+                    <WeatherCard apiary={selectedApiary} hives={hives} snapshots={snapshotsByHive} />
                     <TipsCard
                       advice={apiaryAdvice}
                       events={apiaryEvents}
