@@ -2031,6 +2031,50 @@ a {
   line-height: 1.45;
 }
 
+.firmware-update-form {
+  display: grid;
+  gap: 12px;
+}
+
+.firmware-update-form label {
+  display: grid;
+  gap: 6px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.firmware-release-preview {
+  display: grid;
+  gap: 5px;
+  border: 1px solid #edf2f7;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.firmware-release-preview strong {
+  color: #172033;
+}
+
+.firmware-release-preview span,
+.firmware-release-preview small {
+  overflow-wrap: anywhere;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.inline-checkbox {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 8px !important;
+  color: #334155 !important;
+}
+
+.inline-checkbox input {
+  width: auto;
+}
+
 .reading-mini {
   min-height: 78px;
   display: grid;

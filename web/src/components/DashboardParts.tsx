@@ -38,6 +38,7 @@ import {
   Device,
   DeviceCommand,
   DeviceEvent,
+  FirmwareRelease,
   Hive,
   HiveScaleProfile,
   HiveSuperTare,
@@ -984,7 +985,7 @@ export function ComparisonPanel({
   );
 }
 
-export function HiveDetail({ hive, state, latestByMetric, commands, device, scaleProfile, onLoadHistory, onDeleteHive, onDeleteDevice, onSendCommand, onLoadDevice, onLoadCommands, onSaveTare, onRemoveSuperTare, onClose }: {
+export function HiveDetail({ hive, state, latestByMetric, commands, device, scaleProfile, onLoadHistory, onDeleteHive, onDeleteDevice, onSendCommand, onSendFirmwareUpdate, onLoadFirmwareReleases, onLoadDevice, onLoadCommands, onSaveTare, onRemoveSuperTare, onClose }: {
   hive: Hive;
   state: HiveState;
   latestByMetric: Record<string, SensorReading>;
@@ -995,6 +996,8 @@ export function HiveDetail({ hive, state, latestByMetric, commands, device, scal
   onDeleteHive: () => void | Promise<void>;
   onDeleteDevice?: () => void | Promise<void>;
   onSendCommand?: (command: string, payload?: Record<string, unknown>) => DeviceCommand | void | Promise<DeviceCommand | void>;
+  onSendFirmwareUpdate?: (releaseId: string, force?: boolean) => DeviceCommand | void | Promise<DeviceCommand | void>;
+  onLoadFirmwareReleases?: () => Promise<FirmwareRelease[]>;
   onLoadDevice?: () => Promise<Device>;
   onLoadCommands?: () => Promise<DeviceCommand[]>;
   onSaveTare: (input: {
@@ -1062,7 +1065,17 @@ export function HiveDetail({ hive, state, latestByMetric, commands, device, scal
             <ReadingMini title="RSSI" reading={latestByMetric.rssi} />
           </div>
           <ScaleProfilePanel profile={scaleProfile} onRemoveSuperTare={onRemoveSuperTare} />
-          <DeviceCommandPanel commands={commands} device={device} disabled={!onSendCommand || state.loading} onSendCommand={onSendCommand} onLoadDevice={onLoadDevice} onLoadCommands={onLoadCommands} onSaveTare={onSaveTare} />
+          <DeviceCommandPanel
+            commands={commands}
+            device={device}
+            disabled={!onSendCommand || state.loading}
+            onSendCommand={onSendCommand}
+            onSendFirmwareUpdate={onSendFirmwareUpdate}
+            onLoadFirmwareReleases={onLoadFirmwareReleases}
+            onLoadDevice={onLoadDevice}
+            onLoadCommands={onLoadCommands}
+            onSaveTare={onSaveTare}
+          />
         </>
       )}
 
@@ -1133,6 +1146,8 @@ function DeviceCommandPanel({
   device,
   disabled,
   onSendCommand,
+  onSendFirmwareUpdate,
+  onLoadFirmwareReleases,
   onLoadDevice,
   onLoadCommands,
   onSaveTare
@@ -1141,6 +1156,8 @@ function DeviceCommandPanel({
   device?: Device | null;
   disabled: boolean;
   onSendCommand?: (command: string, payload?: Record<string, unknown>) => DeviceCommand | void | Promise<DeviceCommand | void>;
+  onSendFirmwareUpdate?: (releaseId: string, force?: boolean) => DeviceCommand | void | Promise<DeviceCommand | void>;
+  onLoadFirmwareReleases?: () => Promise<FirmwareRelease[]>;
   onLoadDevice?: () => Promise<Device>;
   onLoadCommands?: () => Promise<DeviceCommand[]>;
   onSaveTare: (input: {
@@ -1202,6 +1219,8 @@ function DeviceCommandPanel({
           device={device}
           onClose={() => setPendingAction(null)}
           onSendCommand={onSendCommand}
+          onSendFirmwareUpdate={onSendFirmwareUpdate}
+          onLoadFirmwareReleases={onLoadFirmwareReleases}
           onLoadDevice={onLoadDevice}
           onLoadCommands={onLoadCommands}
           onSaveTare={onSaveTare}
@@ -1224,6 +1243,8 @@ function DeviceCommandModal({
   device,
   onClose,
   onSendCommand,
+  onSendFirmwareUpdate,
+  onLoadFirmwareReleases,
   onLoadDevice,
   onLoadCommands,
   onSaveTare
@@ -1232,6 +1253,8 @@ function DeviceCommandModal({
   device?: Device | null;
   onClose: () => void;
   onSendCommand?: (command: string, payload?: Record<string, unknown>) => DeviceCommand | void | Promise<DeviceCommand | void>;
+  onSendFirmwareUpdate?: (releaseId: string, force?: boolean) => DeviceCommand | void | Promise<DeviceCommand | void>;
+  onLoadFirmwareReleases?: () => Promise<FirmwareRelease[]>;
   onLoadDevice?: () => Promise<Device>;
   onLoadCommands?: () => Promise<DeviceCommand[]>;
   onSaveTare: (input: {
@@ -1249,11 +1272,15 @@ function DeviceCommandModal({
   const [measuredWeight, setMeasuredWeight] = useState<number | null>(null);
   const [manualWeight, setManualWeight] = useState("");
   const [captureCommandId, setCaptureCommandId] = useState<string | undefined>();
+  const [firmwareReleases, setFirmwareReleases] = useState<FirmwareRelease[]>([]);
+  const [selectedReleaseId, setSelectedReleaseId] = useState("");
+  const [forceFirmwareUpdate, setForceFirmwareUpdate] = useState(false);
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const sessionClosed = useRef(false);
   const isTare = action.mode === "tare";
+  const isFirmwareUpdate = action.command === "firmware_update";
 
   useEffect(() => {
     if (!isTare || step !== "measure" || measuredWeight !== null || !captureCommandId || !onLoadCommands) return;
@@ -1301,16 +1328,39 @@ function DeviceCommandModal({
     return () => window.clearInterval(timer);
   }, [isTare]);
 
+  useEffect(() => {
+    if (!isFirmwareUpdate || !onLoadFirmwareReleases) return;
+    setLoading(true);
+    setError("");
+    onLoadFirmwareReleases()
+      .then((items) => {
+        setFirmwareReleases(items);
+        setSelectedReleaseId((current) => current || items[0]?.id || "");
+      })
+      .catch((nextError) => setError(nextError instanceof Error ? nextError.message : "Не удалось загрузить релизы прошивки"))
+      .finally(() => setLoading(false));
+  }, [isFirmwareUpdate, onLoadFirmwareReleases]);
+
   const wakeTime = latestWakeTime(currentDevice);
   const awake = !isTare || Boolean(wakeTime && wakeTime.getTime() >= openedAt.getTime() - 2000);
   const interval = currentDevice?.telemetry_interval_minutes || device?.telemetry_interval_minutes || 30;
 
   async function submitDeferred() {
     if (sending) return;
+    if (isFirmwareUpdate && !selectedReleaseId) {
+      setError("Выберите релиз прошивки");
+      return;
+    }
     setSending(true);
     try {
-      await onSendCommand?.(action.command, commandPayload(action));
+      if (isFirmwareUpdate) {
+        await onSendFirmwareUpdate?.(selectedReleaseId, forceFirmwareUpdate);
+      } else {
+        await onSendCommand?.(action.command, commandPayload(action));
+      }
       onClose();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : "Не удалось отправить команду");
     } finally {
       setSending(false);
     }
@@ -1408,7 +1458,18 @@ function DeviceCommandModal({
             <TareWizardContent action={action} step={step} measuredWeight={measuredWeight} manualWeight={manualWeight} onManualWeightChange={setManualWeight} />
             {error ? <div className="notice error">{error}</div> : null}
           </>
+        ) : isFirmwareUpdate ? (
+          <FirmwareUpdateContent
+            releases={firmwareReleases}
+            selectedReleaseId={selectedReleaseId}
+            force={forceFirmwareUpdate}
+            loading={loading}
+            onSelectRelease={setSelectedReleaseId}
+            onForceChange={setForceFirmwareUpdate}
+          />
         ) : null}
+
+        {error && !isTare ? <div className="notice error">{error}</div> : null}
 
         <div className="form-actions">
           {isTare ? (
@@ -1465,6 +1526,57 @@ function TareWizardContent({
     );
   }
   return <p className="command-note">Тара сохранена в backend. После сохранения можно отпустить устройство в сон или начать мастер заново.</p>;
+}
+
+function FirmwareUpdateContent({
+  releases,
+  selectedReleaseId,
+  force,
+  loading,
+  onSelectRelease,
+  onForceChange
+}: {
+  releases: FirmwareRelease[];
+  selectedReleaseId: string;
+  force: boolean;
+  loading: boolean;
+  onSelectRelease: (value: string) => void;
+  onForceChange: (value: boolean) => void;
+}) {
+  const selected = releases.find((release) => release.id === selectedReleaseId);
+  if (loading) {
+    return <p className="command-note">Загружаем доступные релизы прошивки...</p>;
+  }
+  if (releases.length === 0) {
+    return <p className="command-note">Активных релизов прошивки для этого типа устройства пока нет. Сначала создайте firmware release через backend API.</p>;
+  }
+  return (
+    <div className="firmware-update-form">
+      <label>
+        Релиз прошивки
+        <select value={selectedReleaseId} onChange={(event) => onSelectRelease(event.target.value)}>
+          {releases.map((release) => (
+            <option key={release.id} value={release.id}>
+              {release.version} · {release.channel} · {release.device_type}
+            </option>
+          ))}
+        </select>
+      </label>
+      {selected ? (
+        <div className="firmware-release-preview">
+          <strong>{selected.version}</strong>
+          <span>{selected.artifact_url}</span>
+          <small>SHA256: {selected.checksum_sha256.slice(0, 16)}...</small>
+          {selected.release_notes ? <small>{selected.release_notes}</small> : null}
+        </div>
+      ) : null}
+      <label className="inline-checkbox">
+        <input type="checkbox" checked={force} onChange={(event) => onForceChange(event.target.checked)} />
+        Принудительно обновить, даже если версия совпадает
+      </label>
+      <p className="command-note">Команда будет выполнена при следующем пробуждении устройства. Для немедленного обновления разбудите устройство вручную.</p>
+    </div>
+  );
 }
 
 function latestWakeTime(device: Device | null) {

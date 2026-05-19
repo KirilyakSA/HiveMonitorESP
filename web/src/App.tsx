@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiClient } from "./api";
-import type { AdviceItem, Apiary, ApiaryTask, Device, DeviceCommand, DeviceEvent, Hive, HiveScaleProfile, HiveTareEvent, Organization, SensorReading, User } from "./api";
+import type { AdviceItem, Apiary, ApiaryTask, Device, DeviceCommand, DeviceEvent, FirmwareRelease, Hive, HiveScaleProfile, HiveTareEvent, Organization, SensorReading, User } from "./api";
 import {
   AlertsPanel,
   ApiariesScreen,
@@ -337,6 +337,26 @@ export function App() {
     }
   }
 
+  async function sendFirmwareUpdateCommand(deviceId: string, releaseId: string, force = false) {
+    if (!selectedApiaryId) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      const created = await client.createFirmwareUpdateCommand(selectedApiaryId, deviceId, releaseId, force);
+      setDeviceCommands((items) => [created, ...items.filter((item) => item.id !== created.id)].slice(0, 20));
+      setMessage(created.status === "failed" ? `Команда обновления не отправлена: ${created.error_message}` : "Команда обновления прошивки отправлена устройству");
+      return created;
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось отправить команду обновления");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadFirmwareReleases(deviceType?: string): Promise<FirmwareRelease[]> {
+    return client.firmwareReleases({ deviceType });
+  }
+
   async function loadDevice(deviceId: string) {
     if (!selectedApiaryId) throw new Error("Пасека не выбрана");
     const device = await client.device(selectedApiaryId, deviceId);
@@ -538,6 +558,8 @@ export function App() {
           onDeleteHive={() => deleteHive(selectedHive)}
           onDeleteDevice={selectedHive.assigned_device_id ? () => deleteDevice(selectedHive.assigned_device_id!) : undefined}
           onSendCommand={selectedHive.assigned_device_id ? (command, payload) => sendDeviceCommand(selectedHive.assigned_device_id!, command, payload) : undefined}
+          onSendFirmwareUpdate={selectedHive.assigned_device_id ? (releaseId, force) => sendFirmwareUpdateCommand(selectedHive.assigned_device_id!, releaseId, force) : undefined}
+          onLoadFirmwareReleases={() => loadFirmwareReleases(selectedDevice?.device_type || selectedHive.assigned_device_type || "hive_monitor")}
           onLoadDevice={selectedHive.assigned_device_id ? () => loadDevice(selectedHive.assigned_device_id!) : undefined}
           onLoadCommands={selectedHive.assigned_device_id ? () => loadDeviceCommands(selectedHive.assigned_device_id!) : undefined}
           onSaveTare={saveHiveTare}
