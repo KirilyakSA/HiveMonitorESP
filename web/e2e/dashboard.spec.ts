@@ -100,6 +100,37 @@ test.describe("HiveMonitor dashboard", () => {
     }
   });
 
+  test("queues firmware update command from a selected release", async ({ page }) => {
+    cleanupFirmwareUpdateFixture();
+    const fixture = seedFirmwareUpdateFixture();
+
+    try {
+      await login(page);
+      await selectNorthApiary(page);
+
+      await page.locator(".hive-table-row").filter({ hasText: fixture.hive_name }).first().click();
+      const detail = page.locator(".hive-detail");
+      await expect(detail).toBeVisible();
+      await detail.getByRole("button", { name: "Обновление прошивки" }).click();
+
+      const dialog = page.getByRole("dialog", { name: "Обновление прошивки" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByLabel("Релиз прошивки")).toContainText(fixture.release_version);
+      await expect(dialog.getByText(fixture.artifact_url)).toBeVisible();
+      await dialog.getByRole("button", { name: "Обновление прошивки" }).click();
+
+      await expect(dialog).toBeHidden();
+      await expect(detail.locator(".command-status").first()).toContainText("Обновление прошивки");
+      const command = firmwareUpdateCommandFromDatabase(fixture.release_id);
+      expect(command.command).toBe("firmware_update");
+      expect(command.payload.version).toBe(fixture.release_version);
+      expect(command.payload.artifact_url).toBe(fixture.artifact_url);
+      expect(["created", "published", "failed"]).toContain(command.status);
+    } finally {
+      cleanupFirmwareUpdateFixture();
+    }
+  });
+
   test("switches hive drawer tabs and chart periods", async ({ page }) => {
     await login(page);
     await selectNorthApiary(page);
@@ -280,5 +311,87 @@ function cleanupExpiredCommandFixture() {
   runDatabaseSQL(`
 delete from device_commands
 where payload->>'source' = 'e2e-expired-command-status';
+`);
+}
+
+function seedFirmwareUpdateFixture() {
+  return queryDatabaseJSON<{
+    hive_name: string;
+    release_id: string;
+    release_version: string;
+    artifact_url: string;
+  }>(`
+with target as (
+  select h.name as hive_name
+  from hives h
+  join device_assignments da on da.hive_id = h.id and da.unassigned_at is null
+  join devices d on d.id = da.device_id
+  where h.apiary_id = '33333333-3333-3333-3333-333333333331'::uuid
+    and d.device_type = 'hive_monitor'
+  order by h.created_at desc
+  limit 1
+),
+release as (
+  insert into firmware_releases (
+    device_type, version, channel, artifact_url, checksum_sha256,
+    release_notes, is_active, created_by
+  )
+  values (
+    'hive_monitor',
+    'e2e-ota-release',
+    'e2e',
+    'https://example.com/hivemonitor/e2e-ota-release.bin',
+    'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    'E2E OTA release',
+    true,
+    '11111111-1111-1111-1111-111111111111'::uuid
+  )
+  on conflict (device_type, version, channel) do update
+  set artifact_url = excluded.artifact_url,
+      checksum_sha256 = excluded.checksum_sha256,
+      release_notes = excluded.release_notes,
+      is_active = true,
+      updated_at = now()
+  returning id, version, artifact_url
+)
+select json_build_object(
+  'hive_name', target.hive_name,
+  'release_id', release.id::text,
+  'release_version', release.version,
+  'artifact_url', release.artifact_url
+)
+from target, release;
+`);
+}
+
+function firmwareUpdateCommandFromDatabase(releaseId: string) {
+  return queryDatabaseJSON<{
+    command: string;
+    status: string;
+    payload: { version: string; artifact_url: string; release_id: string };
+  }>(`
+select json_build_object(
+  'command', command,
+  'status', status,
+  'payload', payload
+)
+from device_commands
+where command = 'firmware_update'
+  and payload->>'release_id' = '${releaseId}'
+order by created_at desc
+limit 1;
+`);
+}
+
+function cleanupFirmwareUpdateFixture() {
+  runDatabaseSQL(`
+delete from device_commands
+where command = 'firmware_update'
+  and payload->>'version' = 'e2e-ota-release';
+
+delete from firmware_releases
+where device_type = 'hive_monitor'
+  and version = 'e2e-ota-release'
+  and channel = 'e2e';
 `);
 }

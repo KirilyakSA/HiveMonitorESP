@@ -11,6 +11,7 @@ export default defineConfig({
       "/me": "http://localhost:8080",
       "/organizations": "http://localhost:8080",
       "/apiaries": "http://localhost:8080",
+      "/firmware": "http://localhost:8080",
       "/hives": "http://localhost:8080",
       "/healthz": "http://localhost:8080"
     }
