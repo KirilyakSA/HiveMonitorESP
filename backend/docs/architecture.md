@@ -227,6 +227,7 @@ Payload команды:
 Логика выполнения:
 
 - `reboot`, `firmware_update`, `config_update` ставятся в очередь и выполняются при следующем пробуждении устройства. UI предупреждает, что для немедленного выполнения устройство нужно разбудить вручную.
+- `firmware_update` обычно создается через release-aware endpoint: backend берет metadata из `firmware_releases`, кладет в payload `release_id`, `version`, `channel`, `artifact_url`, `checksum_sha256`, а firmware скачивает artifact и перезагружается после публикации `commandStatus`.
 - firmware tare и калибровка весов не являются backend-командами. Они выполняются локально в web-интерфейсе устройства: firmware tare сбрасывает весы устройства в ноль, calibration flow использует калибровочные веса 1 кг, 100 г и 10 г.
 - тара улья и тара магазинов не отправляются на устройство. Backend хранит тару как параметр улья/магазина и вычитает ее из сырого веса, который приходит от устройства.
 - для backend-тары устройство участвует только как источник одноразового raw weight: UI отправляет `hold_config_session`, после подготовки улья/магазина отправляет `capture_weight`, затем при любом закрытии мастера отправляет `finish_config_session`.
@@ -1183,5 +1184,5 @@ DELETE /apiaries/{id}
 7. Добавить notification records без реальной доставки.
 8. Добавить tasks/reminders.
 9. Добавить weather provider abstraction.
-10. Добавить OTA модели и endpoints.
+10. Добавить OTA rollout waves, rollback, certificate pinning и firmware-side SHA256 verification.
 11. Добавить партиционирование telemetry перед production-нагрузкой.

@@ -78,3 +78,62 @@ void platformDeepSleepSeconds(uint32_t seconds) {
     esp_deep_sleep_start();
 #endif
 }
+
+bool platformHttpFirmwareUpdate(const String& artifactUrl, String& message) {
+    if (artifactUrl.length() == 0) {
+        message = "Firmware artifact URL is empty";
+        return false;
+    }
+    bool secure = artifactUrl.startsWith("https://");
+    bool plain = artifactUrl.startsWith("http://");
+    if (!secure && !plain) {
+        message = "Firmware artifact URL must start with http:// or https://";
+        return false;
+    }
+
+#if defined(HIVE_PLATFORM_ESP8266)
+    ESPhttpUpdate.rebootOnUpdate(false);
+    t_httpUpdate_return result;
+    if (secure) {
+        HiveSecureClient client;
+        client.setInsecure();
+        result = ESPhttpUpdate.update(client, artifactUrl);
+    } else {
+        HivePlainClient client;
+        result = ESPhttpUpdate.update(client, artifactUrl);
+    }
+
+    if (result == HTTP_UPDATE_OK) {
+        message = "Firmware update downloaded; restarting";
+        return true;
+    }
+    if (result == HTTP_UPDATE_NO_UPDATES) {
+        message = "No firmware update available";
+        return false;
+    }
+    message = "Firmware update failed: " + ESPhttpUpdate.getLastErrorString();
+    return false;
+#else
+    httpUpdate.rebootOnUpdate(false);
+    t_httpUpdate_return result;
+    if (secure) {
+        HiveSecureClient client;
+        client.setInsecure();
+        result = httpUpdate.update(client, artifactUrl);
+    } else {
+        HivePlainClient client;
+        result = httpUpdate.update(client, artifactUrl);
+    }
+
+    if (result == HTTP_UPDATE_OK) {
+        message = "Firmware update downloaded; restarting";
+        return true;
+    }
+    if (result == HTTP_UPDATE_NO_UPDATES) {
+        message = "No firmware update available";
+        return false;
+    }
+    message = "Firmware update failed: " + httpUpdate.getLastErrorString();
+    return false;
+#endif
+}

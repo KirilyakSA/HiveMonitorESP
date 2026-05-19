@@ -180,8 +180,8 @@ Firmware update MVP / MVP обновления прошивки:
   EN: `POST /firmware/releases` creates or updates a release by the unique key `device_type + version + channel`.
 - RU: `POST /apiaries/{apiaryID}/devices/{deviceUUID}/firmware-update` проверяет доступ пользователя, активность релиза и совместимость `device_type`, затем создает deferred `firmware_update` command с payload релиза.
   EN: `POST /apiaries/{apiaryID}/devices/{deviceUUID}/firmware-update` checks user access, release activity and `device_type` compatibility, then creates a deferred `firmware_update` command with release payload.
-- RU: flashing/rollback на firmware-стороне еще не реализованы: текущая прошивка получает команду, но возвращает `not implemented`.
-  EN: firmware-side flashing/rollback are not implemented yet: current firmware receives the command but returns `not implemented`.
+- RU: firmware-side flashing MVP реализован в прошивке для ESP8266/ESP32: устройство скачивает `artifact_url`, публикует `commandStatus` и перезагружается. Rollout waves, rollback, certificate pinning и firmware-side SHA256 verification остаются следующими hardening-задачами.
+  EN: firmware-side flashing MVP is implemented for ESP8266/ESP32: the device downloads `artifact_url`, publishes `commandStatus` and reboots. Rollout waves, rollback, certificate pinning and firmware-side SHA256 verification remain next hardening tasks.
 
 ## Календарь работ и советы
 
@@ -205,7 +205,7 @@ calendar_template + apiary_calendar_settings + date_shift_days + trigger_type + 
 - Weather providers и метеостанции.
 - Полная recurring task engine с RRULE.
 - Архивация телеметрии.
-- OTA flashing в firmware, rollout waves и rollback.
+- OTA rollout waves, rollback, certificate pinning и firmware-side SHA256 verification.
 - Tariffs/billing.
 - AI premium functions.
 

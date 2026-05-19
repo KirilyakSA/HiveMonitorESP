@@ -100,7 +100,7 @@ EN: After the project review, mismatches were moved to GitHub Issues with the hi
 - `deviceToken` остается в firmware как legacy/fallback поле локальной конфигурации.
 - Для спящих устройств термин `offline` не должен использоваться как прямой alert. Правильная логика - пропущенные плановые передачи.
 - Push-уведомления и mobile MVP пока не реализованы.
-- OTA через backend является целевым требованием, но не реализовано.
+- OTA через backend частично реализована: backend хранит metadata релизов и публикует `firmware_update`, firmware ESP8266/ESP32 скачивает artifact по URL и перезагружается после `commandStatus`. Rollout waves, rollback, certificate pinning и SHA256-проверка внутри firmware еще впереди.
 
 ## Требования, которые уже отражены в ТЗ, но не реализованы
 
@@ -116,7 +116,7 @@ EN: After the project review, mismatches were moved to GitHub Issues with the hi
 - Push и Telegram delivery.
 - Weather providers и метеостанция пасеки.
 - Архив телеметрии после 1 года.
-- OTA rollout.
+- OTA rollout waves, rollback, certificate pinning и SHA256-проверка внутри firmware.
 - AI premium функции.
 
 ## Рекомендации

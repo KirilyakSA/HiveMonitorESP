@@ -115,8 +115,11 @@ EN: This document captures the nearest project backlog. GitHub Issues remain the
   - RU: DONE MVP - снятие последнего/выбранного магазина: активная тара возвращается к предыдущему магазину или таре пустого улья, профиль веса показывается в панели улья.
   - EN: DONE MVP - remove latest/selected super: active tare falls back to the previous super or empty-hive tare, and the hive drawer shows the weight profile.
 - Backend:
-  - RU: DONE MVP - firmware release metadata registry и endpoint постановки `firmware_update` команды с payload релиза. Следующий шаг - firmware OTA flashing, rollout waves и rollback.
-  - EN: DONE MVP - firmware release metadata registry and endpoint for queuing a `firmware_update` command with release payload. Next step - firmware OTA flashing, rollout waves and rollback.
+  - RU: DONE MVP - firmware release metadata registry и endpoint постановки `firmware_update` команды с payload релиза. Следующий шаг - rollout waves, rollback, certificate pinning и SHA256-проверка в firmware.
+  - EN: DONE MVP - firmware release metadata registry and endpoint for queuing a `firmware_update` command with release payload. Next step - rollout waves, rollback, certificate pinning and firmware-side SHA256 verification.
+- Firmware:
+  - RU: DONE MVP - ESP8266/ESP32 принимают `firmware_update`, скачивают artifact по URL, публикуют `commandStatus` и перезагружаются после публикации статуса. Следующий шаг - rollout waves, rollback, certificate pinning и SHA256-проверка в firmware.
+  - EN: DONE MVP - ESP8266/ESP32 accept `firmware_update`, download the artifact by URL, publish `commandStatus` and reboot after status publishing. Next step - rollout waves, rollback, certificate pinning and firmware-side SHA256 verification.
 - Web:
   - RU: DONE MVP - погодная карточка стала аналитической: weather mock вынесен в data/module слой, а UI показывает объяснения динамики веса с учетом дождя, ветра, ночной температуры и сравнения ульев.
   - EN: DONE MVP - the weather card became analytical: weather mock is moved into a data/module layer, and the UI shows weight-dynamics explanations using rain, wind, night temperature and hive comparison.

@@ -352,6 +352,10 @@ void HiveMonitorApp::handleMqttMessage(const String& topic, const String& payloa
         delay(500);
         platformRestart();
     }
+    if (ok && command == "firmware_update") {
+        delay(1000);
+        platformRestart();
+    }
     if (ok && command == "finish_config_session") {
         delay(500);
         enterDeepSleepIfEnabled();
@@ -420,8 +424,7 @@ bool HiveMonitorApp::handleMqttCommand(const String& command, JsonVariantConst d
         return handleMqttConfigUpdate(data, message);
     }
     if (command == "firmware_update") {
-        message = "Firmware update command is not implemented in firmware yet";
-        return false;
+        return handleMqttFirmwareUpdate(data, result, message);
     }
 
     message = "Unsupported command";
@@ -444,6 +447,40 @@ bool HiveMonitorApp::handleMqttConfigUpdate(JsonVariantConst data, String& messa
     applyConfigChanges();
     message = "Config updated";
     return true;
+}
+
+bool HiveMonitorApp::handleMqttFirmwareUpdate(JsonVariantConst data, JsonDocument& result, String& message) {
+    if (data.isNull()) {
+        message = "Missing firmware update payload";
+        return false;
+    }
+
+    String artifactUrl = data["artifact_url"] | data["artifactUrl"] | data["url"] | "";
+    String version = data["version"] | "";
+    String channel = data["channel"] | "";
+    String releaseId = data["release_id"] | data["releaseId"] | "";
+    String checksumSha256 = data["checksum_sha256"] | data["checksumSha256"] | "";
+    artifactUrl.trim();
+    if (artifactUrl.length() == 0) {
+        message = "Missing firmware artifact URL";
+        return false;
+    }
+    if (WiFi.status() != WL_CONNECTED) {
+        message = "Wi-Fi is not connected";
+        return false;
+    }
+
+    result["release_id"] = releaseId;
+    result["target_version"] = version;
+    result["channel"] = channel;
+    result["artifact_url"] = artifactUrl;
+    result["checksum_sha256"] = checksumSha256;
+    result["checksum_verified"] = false;
+    result["checksum_note"] = "SHA256 verification is not implemented in firmware OTA MVP";
+
+    bool ok = platformHttpFirmwareUpdate(artifactUrl, message);
+    result["restart_required"] = ok;
+    return ok;
 }
 
 void HiveMonitorApp::publishCommandStatus(const String& commandId, const String& command, bool ok, const String& message, JsonVariantConst result) {

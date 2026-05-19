@@ -58,6 +58,7 @@ private:
     void handleMqttMessage(const String& topic, const String& payload);
     bool handleMqttCommand(const String& command, JsonVariantConst data, JsonDocument& result, String& message);
     bool handleMqttConfigUpdate(JsonVariantConst data, String& message);
+    bool handleMqttFirmwareUpdate(JsonVariantConst data, JsonDocument& result, String& message);
     void publishCommandStatus(const String& commandId, const String& command, bool ok, const String& message, JsonVariantConst result = JsonVariantConst());
     String telemetryToJson(const Telemetry& telemetry) const;
     void publishOrBuffer(const String& payload);

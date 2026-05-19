@@ -172,7 +172,7 @@ apiaries/{apiaryId}/devices/{deviceId}/status
 - `hold_config_session` - удержать устройство активным и не уходить в deep sleep;
 - `capture_weight` - выполнить одноразовый raw-замер веса для backend-мастера тары;
 - `finish_config_session` - завершить сессию настройки и снова разрешить deep sleep;
-- `firmware_update` - backend уже может передать metadata релиза (`version`, `artifact_url`, `checksum_sha256`), но OTA flashing в прошивке еще не реализован и сейчас возвращает ошибку "not implemented";
+- `firmware_update` - скачать firmware artifact по `artifact_url`, записать обновление во flash, опубликовать `commandStatus` и перезагрузиться;
 - legacy/dev команды `measure`, `tare`, `clearBuffer` пока сохранены для локальной совместимости.
 
 Команды можно отправлять строкой (`measure`) или JSON:
@@ -180,6 +180,24 @@ apiaries/{apiaryId}/devices/{deviceId}/status
 ```json
 {"id":"command_uuid","command":"capture_weight","payload":{"purpose":"hive_tare"}}
 ```
+
+Для OTA через backend:
+
+```json
+{
+  "id": "command_uuid",
+  "command": "firmware_update",
+  "payload": {
+    "release_id": "release_uuid",
+    "version": "0.1.1",
+    "channel": "stable",
+    "artifact_url": "https://updates.example.com/hivemonitor/esp8266-0.1.1.bin",
+    "checksum_sha256": "..."
+  }
+}
+```
+
+Текущий OTA MVP принимает `http://` и `https://` URL. Для `https://` используется insecure TLS client, потому что certificate pinning еще не настроен. `checksum_sha256` возвращается в `commandStatus.result`, но SHA256-проверка внутри firmware пока не реализована; это обязательный hardening перед production rollout.
 
 Для обновления конфигурации:
 
